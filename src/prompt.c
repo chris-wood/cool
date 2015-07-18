@@ -1,6 +1,7 @@
 #include <stdio.h>
+#include <stdlib.h>
 
-static char input[2048];
+#include <editline/readline.h>
 
 int
 main(int argc, char **argv)
@@ -9,9 +10,10 @@ main(int argc, char **argv)
     printf("Press ctrl+c to exit\n");
     
     for (;;) {
-        fprintf(stdout, "COOL> ");
-        fgets(input, 2048, stdin);
-        fprintf(stdout, "No, you're a %s", input);
+        char *input = readline("COOL> ");
+        add_history(input);
+        fprintf(stdout, "No, you're a %s\n", input);
+        free(input);
     }
 
     return 0;
