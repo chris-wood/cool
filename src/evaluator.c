@@ -48,10 +48,10 @@ int main(int argc, char** argv) {
     mpc_parser_t* Cool = mpc_new("cool");
 
     mpca_lang(MPCA_LANG_DEFAULT,
-        "                                                     \
-        number   : /-?[0-9]+/ ;                             \
-        operator : '+' | '-' | '*' | '/' ;                  \
-        expr     : <number> | '(' <operator> <expr>+ ')' ;  \
+        "                                                  \
+        number   : /-?[0-9]+/ ;                            \
+        operator : '+' | '-' | '*' | '/' ;                 \
+        expr     : <number> | '(' <operator> <expr>+ ')' ; \
         cool    : /^/ <operator> <expr>+ /$/ ;             \
         ",
         Number, Operator, Expr, Cool);
