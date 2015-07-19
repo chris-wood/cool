@@ -4,33 +4,106 @@
 
 #include "mpc.h"
 
-long 
-eval_op(long x, char* op, long y) {
-    if (strcmp(op, "+") == 0) { 
-        return x + y; 
-    } 
-    if (strcmp(op, "-") == 0) { 
-        return x - y; 
-    }
-    if (strcmp(op, "*") == 0) { 
-        return x * y; 
-    }
-    if (strcmp(op, "/") == 0) { 
-        return x / y; 
-    }
-    return 0;
+typedef enum {
+    CoolValueError_DivideByZero,
+    CoolValueError_BadOperator,
+    CoolValueError_BadNumber
+} CoolValueError;
+
+typedef enum {
+    CoolValue_Number,
+    CoolValue_Error
+} CoolValue;
+
+typedef struct {
+    int type;
+    long number;
+    int error;
+} cval;
+
+cval cval_number(long x) {
+    cval value;
+    value.type = CoolValue_Number;
+    value.number = x;
+    return value;
 }
 
-long 
+cval cval_error(int x) {
+    cval value;
+    value.type = CoolValue_Error;
+    value.number = x;
+    return value;
+}
+
+void cval_printError(CoolValueError errorType) {
+    switch (errorType) {
+        case CoolValueError_BadNumber:
+            printf("Error: Invalid number.");
+            break;
+        case CoolValueError_BadOperator:
+            printf("Error: Invalid operator.");
+            break;
+        case CoolValueError_DivideByZero:
+            printf("Error: Division by zero is not allowed.");
+            break;
+    }
+}
+
+void cval_print(cval value) {
+    switch (value.type) {
+        case CoolValue_Number: 
+            printf("%li", value.number);
+            break;
+        case CoolValue_Error:
+            cval_printError((CoolValueError) value.number);
+            break;
+    }  
+}
+
+void cval_println(cval value) {
+    cval_print(value);
+    putchar('\n');
+}
+
+cval 
+eval_op(cval x, char* op, cval y) {
+
+    if (x.type == CoolValue_Error) {
+        return x;
+    }
+    if (y.type == CoolValue_Error) {
+        return y;
+    }
+
+    if (strcmp(op, "+") == 0) { 
+        return cval_number(x.number + y.number); 
+    } 
+    if (strcmp(op, "-") == 0) { 
+        return cval_number(x.number - y.number); 
+    }
+    if (strcmp(op, "*") == 0) { 
+        return cval_number(x.number * y.number); 
+    }
+    if (strcmp(op, "/") == 0) { 
+        return y.number == 0 ? 
+            cval_error(CoolValueError_DivideByZero) : 
+            cval_number(x.number / y.number); 
+    }
+
+    return cval_error(CoolValueError_BadOperator);
+}
+
+cval 
 eval(mpc_ast_t* t) 
 {
     if (strstr(t->tag, "number")) {
-       return atoi(t->contents);
+        // TODO: handle bad numbers here
+        return cval_number(atoi(t->contents));
     }
 
     char* op = t->children[1]->contents;
 
-    long x = eval(t->children[2]);
+    cval x = eval(t->children[2]);
 
     int i = 3;
     while (strstr(t->children[i]->tag, "expr")) {
@@ -65,8 +138,8 @@ int main(int argc, char** argv) {
 
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
-            long result = eval(r.output);
-            printf("%li\n", result);
+            cval result = eval(r.output);
+            cval_println(result);
             mpc_ast_delete(r.output);
         } else {
             mpc_err_print(r.error);
