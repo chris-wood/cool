@@ -13,36 +13,88 @@ typedef enum {
 typedef enum {
     CoolValue_Number,
     CoolValue_Symbol,
-
+    CoolValue_Sexpr,
     CoolValue_Error
 } CoolValue;
 
-typedef struct {
+typedef struct cval {
     int type;
     long number;
     char *errorString;
     char *symbolString;
     int count;
-    struct cval** cell; // cons cells for this s-expression
+    struct cval ** cell; // cons cells for this s-expression
     int error;
 } cval;
 
-cval* cval_number(long x) {
+void cval_print(cval *value);
+cval * cval_eval(cval *value);
+
+cval *
+cval_number(long x) 
+{
     cval *value = (cval *) malloc(sizeof(cval));
     value->type = CoolValue_Number;
     value->number = x;
     return value;
 }
 
-cval* cval_error(int x) {
+cval *
+cval_symbol(char *symbol) 
+{
     cval *value = (cval *) malloc(sizeof(cval));
-    value->type = CoolValue_Error;
-    
-    value->number = x;
+    value->type = CoolValue_Symbol;
+    value->symbolString = (char *) malloc((strlen(symbol) + 1) * sizeof(char));
+    strcpy(value->symbolString, symbol);
     return value;
 }
 
-void cval_printError(CoolValueError errorType) {
+cval * 
+cval_sexpr() 
+{
+    cval *value = (cval *) malloc(sizeof(cval));
+    value->type = CoolValue_Sexpr;
+    value->count = 0;
+    value->cell = NULL;
+    return value;
+}
+
+cval * 
+cval_error(char *message) 
+{
+    cval *value = (cval *) malloc(sizeof(cval));
+    value->type = CoolValue_Error;
+    value->errorString = (char *) malloc((strlen(message) + 1) * sizeof(char));
+    strcpy(value->errorString, message);
+    return value;
+}
+
+void 
+cval_delete(cval *value)
+{
+    switch (value->type) {
+        case CoolValue_Number:
+            break;
+        case CoolValue_Error:
+            free(value->errorString);
+            break;
+        case CoolValue_Symbol:
+            free(value->symbolString);
+            break;
+        case CoolValue_Sexpr:
+            for (int i = 0; i < value->count; i++) {
+                cval_delete(value->cell[i]);
+            }
+            free(value->cell);
+            break;
+    }
+
+    free(value);
+}
+
+void 
+cval_printError(CoolValueError errorType) 
+{
     switch (errorType) {
         case CoolValueError_BadNumber:
             printf("Error: Invalid number.");
@@ -56,72 +108,209 @@ void cval_printError(CoolValueError errorType) {
     }
 }
 
-void cval_print(cval value) {
-    switch (value.type) {
+void
+cval_printExpr(cval *value, char open, char close)
+{
+    putchar(open);
+    for (int i = 0; i < value->count; i++) {
+        cval_print(value->cell[i]);
+        if (i != (value->count - 1)) {
+            putchar(' ');
+        }
+    }
+    putchar(close);
+}
+
+void 
+cval_print(cval *value) 
+{
+    switch (value->type) {
         case CoolValue_Number: 
-            printf("%li", value.number);
+            printf("%li", value->number);
             break;
         case CoolValue_Error:
-            cval_printError((CoolValueError) value.number);
+            cval_printError((CoolValueError) value->number);
+            break;
+        case CoolValue_Symbol:
+            printf("%s", value->symbolString);
+            break;
+        case CoolValue_Sexpr:
+            cval_printExpr(value, '(', ')');
             break;
     }  
 }
 
-void cval_println(cval value) {
+void 
+cval_println(cval *value) 
+{
     cval_print(value);
     putchar('\n');
 }
 
-cval 
-eval_op(cval x, char* op, cval y) {
-
-    if (x.type == CoolValue_Error) {
-        return x;
-    }
-    if (y.type == CoolValue_Error) {
-        return y;
-    }
-
-    if (strcmp(op, "+") == 0) { 
-        return cval_number(x.number + y.number); 
-    } 
-    if (strcmp(op, "-") == 0) { 
-        return cval_number(x.number - y.number); 
-    }
-    if (strcmp(op, "*") == 0) { 
-        return cval_number(x.number * y.number); 
-    }
-    if (strcmp(op, "/") == 0) { 
-        return y.number == 0 ? 
-            cval_error(CoolValueError_DivideByZero) : 
-            cval_number(x.number / y.number); 
-    }
-
-    return cval_error(CoolValueError_BadOperator);
+cval *
+cval_add(cval *value, cval *x) 
+{
+    value->count++;
+    value->cell = realloc(value->cell, sizeof(cval *) * value->count);
+    value->cell[value->count - 1] = x;
+    return value;
 }
 
-cval 
-eval(mpc_ast_t* t) 
+cval * 
+cval_read_num(mpc_ast_t* t) {
+    errno = 0;
+    long x = strtol(t->contents, NULL, 10);
+    return errno != ERANGE ? cval_number(x) : cval_error("invalid number");
+}
+
+cval *
+cval_read(mpc_ast_t *t) 
 {
     if (strstr(t->tag, "number")) {
-        // TODO: handle bad numbers here
-        return cval_number(atoi(t->contents));
+        return cval_read_num(t);
+    }
+    if (strstr(t->tag, "symbol")) {
+        return cval_symbol(t->contents);
     }
 
-    char* op = t->children[1]->contents;
-
-    cval x = eval(t->children[2]);
-
-    int i = 3;
-    while (strstr(t->children[i]->tag, "expr")) {
-        x = eval_op(x, op, eval(t->children[i]));
-        i++;
+    cval *x = NULL;
+    if (strcmp(t->tag, ">") == 0) {
+        x = cval_sexpr();
+    }
+    if (strstr(t->tag, "sexpr")) {
+        x = cval_sexpr();
     }
 
-    return x;  
+    for (int i = 0; i < t->children_num; i++) {
+        if (strcmp(t->children[i]->contents, "(") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->contents, ")") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->contents, "}") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->contents, "{") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->tag, "regex") == 0) {
+            continue;
+        }
+        x = cval_add(x, cval_read(t->children[i]));
+    }
+
+    return x;
 }
 
-int main(int argc, char** argv) {
+cval *
+cval_pop(cval *value, int i)
+{
+    cval *x = value->cell[i];
+    memmove(&value->cell[i], &value->cell[i + 1], sizeof(cval *) * (value->count - 1));
+    value->count--;
+    value->cell = realloc(value->cell, sizeof(cval *) * value->count);
+    return x;
+}
+
+cval *
+cval_take(cval *value, int i) 
+{
+    cval *x = cval_pop(value, i);
+    cval_delete(value);
+    return x;
+}
+
+cval *
+cval_operator(cval *expr, char* op) 
+{
+    for (int i = 0; i < expr->count; i++) {
+        if (expr->cell[i]->type != CoolValue_Number) {
+            cval_delete(expr);
+            return cval_error("Cannot operate on a non-number");
+        }
+    }
+
+    cval *x = cval_pop(expr, 0);
+
+    if ((strcmp(op, "-") == 0) && expr->count == 0) {
+        x->number = -x->number;
+    }
+
+    while (expr->count > 0) {
+        cval *y = cval_pop(expr, 0);
+        if (strcmp(op, "+") == 0) { 
+            x->number += y->number;
+        } 
+        if (strcmp(op, "-") == 0) { 
+            x->number -= y->number; 
+        }
+        if (strcmp(op, "*") == 0) { 
+            x->number *= y->number; 
+        }
+        if (strcmp(op, "/") == 0) { 
+            if (y->number == 0) {
+                cval_delete(x);
+                cval_delete(y);
+                x = cval_error("Division by zero.");
+                break;
+            }
+            x->number /= y->number;
+        }
+        cval_delete(y);
+    }
+
+    cval_delete(expr);
+    return x;
+}
+
+cval *
+cval_evaluateExpression(cval *value)
+{
+    // Evaluate each expression
+    for (int i = 0; i < value->count; i++) {
+        value->cell[i] = cval_eval(value->cell[i]);
+    }
+
+    // If one is an error, take it and return it
+    for (int i = 0; i < value->count; i++) {
+        if (value->cell[i]->type == CoolValue_Error) {
+            return cval_take(value, i);
+        }
+    }
+
+    if (value->count == 0) {
+        return value;
+    }
+
+    if (value->count == 1) {
+        return cval_take(value, 0);
+    }
+
+    cval *first = cval_pop(value, 0);
+    if (first->type != CoolValue_Symbol) {
+        cval_delete(first);
+        cval_delete(value);
+        return cval_error("S-expression does not start with a symbol");
+    }
+
+    cval *result = cval_operator(value, first->symbolString);
+    cval_delete(first);
+    return result;
+}
+
+cval *
+cval_eval(cval *value) 
+{
+    if (value->type == CoolValue_Sexpr) {
+        return cval_evaluateExpression(value);
+    }
+    return value;
+}
+
+int 
+main(int argc, char** argv) 
+{
     mpc_parser_t* Number = mpc_new("number");
     mpc_parser_t* Symbol = mpc_new("symbol");
     mpc_parser_t* Sexpr = mpc_new("sexpr");
@@ -136,7 +325,7 @@ int main(int argc, char** argv) {
             expr   : <number> | <symbol> | <sexpr> ; \
             cool   : /^/ <expr>* /$/ ;               \
         ",
-        Number, Operator, Expr, Cool);
+        Number, Symbol, Sexpr, Expr, Cool);
 
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
@@ -147,9 +336,9 @@ int main(int argc, char** argv) {
 
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
-            cval result = eval(r.output);
-            cval_println(result);
-            mpc_ast_delete(r.output);
+            cval * x = cval_eval(cval_read(r.output));
+            cval_println(x);
+            cval_delete(x);
         } else {
             mpc_err_print(r.error);
             mpc_err_delete(r.error);
