@@ -2,4 +2,5 @@ prompt
 parser
 evaluator
 s_expressions
+q_expressions
 

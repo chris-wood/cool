@@ -297,7 +297,7 @@ builtin_eval(cval *x)
     CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'eval' passed incorrect type");
 
     // pop the head and evaluate it
-    cval *head = cval_take(head, 0);
+    cval *head = cval_take(x, 0);
     head->type = CoolValue_Sexpr;
     cval *evalResult = cval_eval(head);
 
@@ -386,7 +386,7 @@ builtin(cval* a, char* func)
         return builtin_op(a, func); 
     }
 
-    cval_del(a);
+    cval_delete(a);
     return cval_error("Unknown function");
 }
 
