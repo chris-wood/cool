@@ -14,6 +14,7 @@ typedef enum {
     CoolValue_Number,
     CoolValue_Symbol,
     CoolValue_Sexpr,
+    CoolValue_Qexpr,
     CoolValue_Error
 } CoolValue;
 
@@ -26,6 +27,9 @@ typedef struct cval {
     struct cval ** cell; // cons cells for this s-expression
     int error;
 } cval;
+
+#define CASSERT(args, cond, err) \
+    if (!(cond)) { lval_del(args); return lval_err(err); }
 
 void cval_print(cval *value);
 cval * cval_eval(cval *value);
@@ -60,6 +64,16 @@ cval_sexpr()
 }
 
 cval * 
+cval_qexpr() 
+{
+    cval *value = (cval *) malloc(sizeof(cval));
+    value->type = CoolValue_Qexpr;
+    value->count = 0;
+    value->cell = NULL;
+    return value;
+}
+
+cval * 
 cval_error(char *message) 
 {
     cval *value = (cval *) malloc(sizeof(cval));
@@ -82,6 +96,7 @@ cval_delete(cval *value)
             free(value->symbolString);
             break;
         case CoolValue_Sexpr:
+        case CoolValue_Qexpr:
             for (int i = 0; i < value->count; i++) {
                 cval_delete(value->cell[i]);
             }
@@ -137,6 +152,9 @@ cval_print(cval *value)
         case CoolValue_Sexpr:
             cval_printExpr(value, '(', ')');
             break;
+        case CoolValue_Qexpr:
+            cval_printExpr(value, '{', '}');
+            break;
     }  
 }
 
@@ -180,6 +198,9 @@ cval_read(mpc_ast_t *t)
     if (strstr(t->tag, "sexpr")) {
         x = cval_sexpr();
     }
+    if (strstr(t->tag, "qexpr")) {
+        x = cval_qexpr();
+    }
 
     for (int i = 0; i < t->children_num; i++) {
         if (strcmp(t->children[i]->contents, "(") == 0) {
@@ -222,7 +243,84 @@ cval_take(cval *value, int i)
 }
 
 cval *
-cval_operator(cval *expr, char* op) 
+cval_join(cval *x, cval *y)
+{
+    while (y->count > 0) {
+        x = cval_add(x, cval_pop(y, 0));
+    }
+    cval_delete(y);
+    return x;
+}
+
+cval *
+builtin_head(cval *x)
+{
+    CASSERT(x, x->count == 1, "Function 'head' passed to many arguments");
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'head' passed incorrect type");
+    CASSERT(x, x->cell[0]->count > 0, "Function 'head' passed {}");
+
+    cval *head = cval_take(x, 0);
+    while (head->count > 1) {
+        cval_delete(cval_pop(head, 1));
+    }
+
+    return head;
+}
+
+cval *
+builtin_tail(cval *x)
+{
+    CASSERT(x, x->count == 1, "Function 'head' passed to many arguments");
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'tail' passed incorrect type");
+    CASSERT(x, x->cell[0]->count > 0, "Function 'head' passed {}");    
+
+    cval *head = cval_take(x, 0);
+    cval_delete(cval_pop(head, 0));
+    cval *tail = head;
+
+    return tail;
+}
+
+cval *
+builtin_list(cval *x)
+{
+    x->type = CoolValue_Qexpr;
+    return x;
+}
+
+cval *
+builtin_eval(cval *x)
+{
+    CASSERT(x, x->count == 1, "Function 'eval' passed too many arguments");
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'eval' passed incorrect type");
+
+    // pop the head and evaluate it
+    cval *head = cval_take(head, 0);
+    head->type = CoolValue_Sexpr;
+    cval *evalResult = cval_eval(head);
+
+    return evalResult;
+}
+
+cval *
+builtin_join(cval *x)
+{
+    for (int i = 0; i < x->count; i++) {
+        CASSERT(x, x->cell[i]->type == CoolValue_Qexpr, "Function 'join' passed incorrect type");
+    }
+
+    cval *y = cval_pop(x, 0);
+    while (y->count > 0) {
+        y = cval_join(y, cval_pop(x, 0));
+    }
+
+    cval_delete(x);
+
+    return y;
+}
+
+cval *
+builtin_op(cval *expr, char* op) 
 {
     for (int i = 0; i < expr->count; i++) {
         if (expr->cell[i]->type != CoolValue_Number) {
@@ -264,6 +362,32 @@ cval_operator(cval *expr, char* op)
     return x;
 }
 
+cval * 
+builtin(cval* a, char* func) 
+{
+    if (strcmp("list", func) == 0) { 
+        return builtin_list(a); 
+    }
+    if (strcmp("head", func) == 0) { 
+        return builtin_head(a); 
+    }
+    if (strcmp("tail", func) == 0) { 
+        return builtin_tail(a); 
+    }
+    if (strcmp("join", func) == 0) { 
+        return builtin_join(a); 
+    }
+    if (strcmp("eval", func) == 0) { 
+        return builtin_eval(a); 
+    }
+    if (strstr("+-/*", func)) { 
+        return builtin_op(a, func); 
+    }
+
+    lval_del(a);
+    return lval_err("Unknown function");
+}
+
 cval *
 cval_evaluateExpression(cval *value)
 {
@@ -294,7 +418,7 @@ cval_evaluateExpression(cval *value)
         return cval_error("S-expression does not start with a symbol");
     }
 
-    cval *result = cval_operator(value, first->symbolString);
+    cval *result = builtin(value, first->symbolString);
     cval_delete(first);
     return result;
 }
@@ -314,18 +438,22 @@ main(int argc, char** argv)
     mpc_parser_t* Number = mpc_new("number");
     mpc_parser_t* Symbol = mpc_new("symbol");
     mpc_parser_t* Sexpr = mpc_new("sexpr");
+    mpc_parser_t* Qexpr = mpc_new("qexpr");
     mpc_parser_t* Expr = mpc_new("expr");
     mpc_parser_t* Cool = mpc_new("cool");
 
     mpca_lang(MPCA_LANG_DEFAULT,
-        "                                            \
-            number : /-?[0-9]+/ ;                    \
-            symbol : '+' | '-' | '*' | '/' ;         \
-            sexpr  : '(' <expr>* ')' ;               \
-            expr   : <number> | <symbol> | <sexpr> ; \
-            cool   : /^/ <expr>* /$/ ;               \
+        "                                                      \
+            number : /-?[0-9]+/ ;                              \
+            symbol : \"list\" | \"head\" | \"tail\"            \
+                   | \"join\" | \"eval\" | '+' | '-'           \
+                   | '*' | '/' ;                               \
+            sexpr  : '(' <expr>* ')' ;                         \
+            qexpr  : '{' <expr>* '}' ;                         \
+            expr   : <number> | <symbol> | <sexpr> | <qexpr> ; \
+            cool   : /^/ <expr>* /$/ ;                         \
         ",
-        Number, Symbol, Sexpr, Expr, Cool);
+        Number, Symbol, Sexpr, Qexpr, Expr, Cool);
 
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
@@ -348,7 +476,7 @@ main(int argc, char** argv)
         free(input);
     }
     
-    mpc_cleanup(5, Number, Symbol, Sexpr, Expr, Cool);
+    mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, Cool);
 
     return 0;
 }
