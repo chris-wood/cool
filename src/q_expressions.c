@@ -28,11 +28,13 @@ typedef struct cval {
     int error;
 } cval;
 
-#define CASSERT(args, cond, err) \
-    if (!(cond)) { lval_del(args); return lval_err(err); }
-
 void cval_print(cval *value);
-cval * cval_eval(cval *value);
+cval *cval_eval(cval *value);
+void cval_delete(cval *value);
+cval *cval_error(char *message);
+
+#define CASSERT(args, cond, err) \
+    if (!(cond)) { cval_delete(args); return cval_error(err); }
 
 cval *
 cval_number(long x) 
@@ -384,8 +386,8 @@ builtin(cval* a, char* func)
         return builtin_op(a, func); 
     }
 
-    lval_del(a);
-    return lval_err("Unknown function");
+    cval_del(a);
+    return cval_error("Unknown function");
 }
 
 cval *
