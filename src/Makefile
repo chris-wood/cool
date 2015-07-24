@@ -10,7 +10,10 @@ evaluator:
 	gcc -std=c99 -Wall evaluator.c mpc.c -o evaluator -ledit -lm
 
 sexpr:
-	gcc -std=c99 -Wall s_expressions.c mpc.c -o s_expressions -ledit -lm
+	gcc -std=c99 -Wall s_expressions.c mpc.c -o sexpr -ledit -lm
 
 qexpr:
-	gcc -std=c99 -Wall q_expressions.c mpc.c -o q_expressions -ledit -lm
+	gcc -std=c99 -Wall q_expressions.c mpc.c -o qexpr -ledit -lm
+
+vars:
+	gcc -std=c99 -Wall variables.c mpc.c -o vars -ledit -lm

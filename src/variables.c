@@ -19,6 +19,8 @@ typedef enum {
     CoolValue_Error
 } CoolValue;
 
+// struct cenv;
+// struct cval;
 typedef struct cenv cenv;
 typedef struct cval cval; 
 
@@ -31,25 +33,79 @@ struct cval {
     char *errorString;
     char *symbolString;
     int count;
-    lbuiltin fun;
+    cbuiltin function;
     struct cval ** cell; 
     int error;
-} cval;
+};
 
 struct cenv {
     int count;
     char **symbols;
     cval **values;
-}
+};
 
 // Forward declaration prototypes
 void cval_print(cval *value);
-cval *cval_eval(cval *value);
+cval *cval_eval(cenv *env, cval *value);
 void cval_delete(cval *value);
 cval *cval_error(char *message);
+cval *cval_copy(cval *in);
 
 #define CASSERT(args, cond, err) \
     if (!(cond)) { cval_delete(args); return cval_error(err); }
+
+cenv *
+cenv_new() 
+{
+    cenv *env = (cenv *) malloc(sizeof(cenv));
+    env->count = 0;
+    env->symbols = NULL;
+    env->values = NULL;
+    return env;
+}
+
+void
+cenv_delete(cenv *env) 
+{
+    for (int i = 0; i < env->count; i++) {
+        free(env->symbols[i]);
+        cval_delete(env->values[i]);
+    }
+    free(env->symbols);
+    free(env->values);
+    free(env);
+}
+
+cval *
+cenv_get(cenv *env, cval *val) 
+{
+    for (int i = 0; i < env->count; i++) {
+        if (strcmp(env->symbols[i], val->symbolString) == 0) {
+            return cval_copy(env->values[i]);
+        }
+    }
+    return cval_error("Undefined symbol");
+}
+
+void 
+cenv_put(cenv *env, cval* key, cval *val) 
+{
+    // Replace the value if it exists
+    for (int i = 0; i < env->count; i++) {
+        if (strcmp(env->symbols[i], key->symbolString) == 0) {
+            cval_delete(env->values[i]);
+            env->values[i] = cval_copy(val);
+            return;
+        }
+    }
+
+    env->count++;
+    env->values = realloc(env->values, sizeof(cval *) * env->count);
+    env->symbols = realloc(env->symbols, sizeof(char *) * env->count);
+
+    env->values[env->count - 1] = cval_copy(val);
+    asprintf(&(env->symbols[env->count - 1]), "%s", key->symbolString);
+}
 
 cval *
 cval_number(long x) 
@@ -91,10 +147,11 @@ cval_qexpr()
 }
 
 cval *
-cval_function() 
+cval_function(cbuiltin function) 
 {
     cval *value = (cval *) malloc(sizeof(cval));
     value->type = CoolValue_Function;
+    value->function = function;
     value->count = 0;
     value->cell = NULL;
     return value;
@@ -319,7 +376,7 @@ cval_join(cval *x, cval *y)
 }
 
 cval *
-builtin_head(cval *x)
+builtin_head(cenv *env, cval *x)
 {
     CASSERT(x, x->count == 1, "Function 'head' passed to many arguments");
     CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'head' passed incorrect type");
@@ -334,7 +391,7 @@ builtin_head(cval *x)
 }
 
 cval *
-builtin_tail(cval *x)
+builtin_tail(cenv *env, cval *x)
 {
     CASSERT(x, x->count == 1, "Function 'head' passed to many arguments");
     CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'tail' passed incorrect type");
@@ -348,14 +405,14 @@ builtin_tail(cval *x)
 }
 
 cval *
-builtin_list(cval *x)
+builtin_list(cenv *env, cval *x)
 {
     x->type = CoolValue_Qexpr;
     return x;
 }
 
 cval *
-builtin_eval(cval *x)
+builtin_eval(cenv *env, cval *x)
 {
     CASSERT(x, x->count == 1, "Function 'eval' passed too many arguments");
     CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'eval' passed incorrect type");
@@ -363,13 +420,13 @@ builtin_eval(cval *x)
     // pop the head and evaluate it
     cval *head = cval_take(x, 0);
     head->type = CoolValue_Sexpr;
-    cval *evalResult = cval_eval(head);
+    cval *evalResult = cval_eval(env, head);
 
     return evalResult;
 }
 
 cval *
-builtin_join(cval *x)
+builtin_join(cenv *env, cval *x)
 {
     for (int i = 0; i < x->count; i++) {
         CASSERT(x, x->cell[i]->type == CoolValue_Qexpr, "Function 'join' passed incorrect type");
@@ -386,7 +443,7 @@ builtin_join(cval *x)
 }
 
 cval *
-builtin_op(cval *expr, char* op) 
+builtin_op(cenv *env, cval *expr, char* op) 
 {
     for (int i = 0; i < expr->count; i++) {
         if (expr->cell[i]->type != CoolValue_Number) {
@@ -428,38 +485,87 @@ builtin_op(cval *expr, char* op)
     return x;
 }
 
-cval * 
-builtin(cval* a, char* func) 
+cval *
+builtin_add(cval *env, cval *val)
 {
-    if (strcmp("list", func) == 0) { 
-        return builtin_list(a); 
-    }
-    if (strcmp("head", func) == 0) { 
-        return builtin_head(a); 
-    }
-    if (strcmp("tail", func) == 0) { 
-        return builtin_tail(a); 
-    }
-    if (strcmp("join", func) == 0) { 
-        return builtin_join(a); 
-    }
-    if (strcmp("eval", func) == 0) { 
-        return builtin_eval(a); 
-    }
-    if (strstr("+-/*", func)) { 
-        return builtin_op(a, func); 
-    }
-
-    cval_delete(a);
-    return cval_error("Unknown function");
+    return builtin_op(env, val, "+");
 }
 
 cval *
-cval_evaluateExpression(cval *value)
+builtin_sub(cval *env, cval *val)
+{
+    return builtin_op(env, val, "-");
+}
+
+cval *
+builtin_mul(cval *env, cval *val)
+{
+    return builtin_op(env, val, "*");
+}
+
+cval *
+builtin_div(cval *env, cval *val)
+{
+    return builtin_op(env, val, "/");
+}
+
+void
+cenv_addBuiltin(cenv *env, char *name, cbuiltin function)
+{
+    cval *key = cval_symbol(name);
+    cval *value = cval_function(function);
+    cenv_put(env, key, value);
+    cval_delete(key);
+    cval_delete(value);
+}
+
+void 
+cenv_addBuiltinFunctions(cenv *env) 
+{
+    cenv_addBuiltin(env, "list", builtin_list);
+    cenv_addBuiltin(env, "eval", builtin_eval);
+    cenv_addBuiltin(env, "join", builtin_join);
+    cenv_addBuiltin(env, "head", builtin_head);
+    cenv_addBuiltin(env, "tail", builtin_tail);
+
+    cenv_addBuiltin(env, "+", builtin_add);
+    cenv_addBuiltin(env, "-", builtin_sub);
+    cenv_addBuiltin(env, "*", builtin_mul);
+    cenv_addBuiltin(env, "/", builtin_div);    
+}
+
+// cval * 
+// builtin(cenv *env, cval* a, char* func) 
+// {
+//     if (strcmp("list", func) == 0) { 
+//         return builtin_list(env, a); 
+//     }
+//     if (strcmp("head", func) == 0) { 
+//         return builtin_head(env, a); 
+//     }
+//     if (strcmp("tail", func) == 0) { 
+//         return builtin_tail(env, a); 
+//     }
+//     if (strcmp("join", func) == 0) { 
+//         return builtin_join(env, a); 
+//     }
+//     if (strcmp("eval", func) == 0) { 
+//         return builtin_eval(env, a); 
+//     }
+//     if (strstr("+-/*", func)) { 
+//         return builtin_op(a, func); 
+//     }
+
+//     cval_delete(a);
+//     return cval_error("Unknown function");
+// }
+
+cval *
+cval_evaluateExpression(cenv *env, cval *value)
 {
     // Evaluate each expression
     for (int i = 0; i < value->count; i++) {
-        value->cell[i] = cval_eval(value->cell[i]);
+        value->cell[i] = cval_eval(env, value->cell[i]);
     }
 
     // If one is an error, take it and return it
@@ -477,23 +583,28 @@ cval_evaluateExpression(cval *value)
         return cval_take(value, 0);
     }
 
-    cval *first = cval_pop(value, 0);
-    if (first->type != CoolValue_Symbol) {
-        cval_delete(first);
+    cval *funcSymbol = cval_pop(value, 0);
+    if (funcSymbol->type != CoolValue_Function) {
+        cval_delete(funcSymbol);
         cval_delete(value);
-        return cval_error("S-expression does not start with a symbol");
+        return cval_error("S-expression does not start with a function");
     }
 
-    cval *result = builtin(value, first->symbolString);
-    cval_delete(first);
+    cval *result = funcSymbol->function(env, value);
+    cval_delete(funcSymbol);
+
     return result;
 }
 
 cval *
-cval_eval(cval *value) 
+cval_eval(cenv* env, cval *value) 
 {
-    if (value->type == CoolValue_Sexpr) {
-        return cval_evaluateExpression(value);
+    if (value->type == CoolValue_Symbol) {
+        cval *result = cenv_get(env, value);
+        cval_delete(value);
+        return result;
+    } else if (value->type == CoolValue_Sexpr) {
+        return cval_evaluateExpression(env, value);
     }
     return value;
 }
@@ -522,13 +633,17 @@ main(int argc, char** argv)
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
 
+    // Setup the environment
+    cenv *env = (cenv *) malloc(sizeof(cenv));
+    cenv_addBuiltinFunctions(env);
+
     for (;;) {
         char* input = readline("COOL> ");
         add_history(input);
 
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
-            cval * x = cval_eval(cval_read(r.output));
+            cval * x = cval_eval(env, cval_read(r.output));
             cval_println(x);
             cval_delete(x);
             mpc_ast_delete(r.output);
@@ -540,6 +655,8 @@ main(int argc, char** argv)
         free(input);
     }
     
+    cenv_delete(env);
+
     mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, Cool);
 
     return 0;
