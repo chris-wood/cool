@@ -193,22 +193,6 @@ cval_delete(cval *value)
     free(value);
 }
 
-void 
-cval_printError(CoolValueError errorType) 
-{
-    switch (errorType) {
-        case CoolValueError_BadNumber:
-            printf("Error: Invalid number.");
-            break;
-        case CoolValueError_BadOperator:
-            printf("Error: Invalid operator.");
-            break;
-        case CoolValueError_DivideByZero:
-            printf("Error: Division by zero is not allowed.");
-            break;
-    }
-}
-
 void
 cval_printExpr(cval *value, char open, char close)
 {
@@ -230,7 +214,7 @@ cval_print(cval *value)
             printf("%li", value->number);
             break;
         case CoolValue_Error:
-            cval_printError((CoolValueError) value->number);
+            printf("Error: %s", value->errorString); 
             break;
         case CoolValue_Symbol:
             printf("%s", value->symbolString);
