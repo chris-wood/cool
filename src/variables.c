@@ -417,8 +417,9 @@ builtin_join(cenv *env, cval *x)
     }
 
     cval *y = cval_pop(x, 0);
-    while (y->count > 0) {
-        y = cval_join(y, cval_pop(x, 0));
+    while (x->count > 0) {
+        cval *z = cval_pop(x, 0);
+        y = cval_join(y, z);
     }
 
     cval_delete(x);
