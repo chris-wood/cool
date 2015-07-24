@@ -366,6 +366,10 @@ builtin_def(cenv *env, cval *val)
     CASSERT(val, val->cell[0]->type == CoolValue_Qexpr, "Function 'def' passed incorrect type");
 
     cval *symbols = val->cell[0];
+
+    // cval_println(val);
+    // cval_println(symbols);
+
     for (int i = 0; i < symbols->count; i++) {
         CASSERT(val, symbols->cell[i]->type == CoolValue_Symbol, "Function 'def' cannot define a non-symbol");
     }
