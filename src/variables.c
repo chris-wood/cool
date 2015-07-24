@@ -360,6 +360,28 @@ cval_join(cval *x, cval *y)
 }
 
 cval *
+builtin_def(cenv *env, cval *val) 
+{
+    CASSERT(val, val->count > 0, "Function 'def' expected non-empty variable declaration");
+    CASSERT(val, val->cell[0]->type == CoolValue_Qexpr, "Function 'def' passed incorrect type");
+
+    cval *symbols = val->cell[0];
+    for (int i = 0; i < symbols->count; i++) {
+        CASSERT(val, symbols->cell[i]->type == CoolValue_Symbol, "Function 'def' cannot define a non-symbol");
+    }
+
+    CASSERT(val, symbols->count == val->count - 1, "Function 'def' cannot define incorrect number of values to symbols");
+
+    for (int i = 0; i < symbols->count; i++) {
+        cenv_put(env, symbols->cell[i], val->cell[i + 1]);
+    }
+
+    cval_delete(val);
+
+    return cval_sexpr();
+}
+
+cval *
 builtin_head(cenv *env, cval *x)
 {
     CASSERT(x, x->count == 1, "Function 'head' passed to many arguments");
@@ -512,6 +534,8 @@ cenv_addBuiltinFunctions(cenv *env)
     cenv_addBuiltin(env, "join", builtin_join);
     cenv_addBuiltin(env, "head", builtin_head);
     cenv_addBuiltin(env, "tail", builtin_tail);
+
+    cenv_addBuiltin(env, "def",  builtin_def);
 
     cenv_addBuiltin(env, "+", builtin_add);
     cenv_addBuiltin(env, "-", builtin_sub);
