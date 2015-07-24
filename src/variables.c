@@ -19,10 +19,10 @@ typedef enum {
     CoolValue_Error
 } CoolValue;
 
-// struct cenv;
-// struct cval;
+struct cenv;
+struct cval;
 typedef struct cenv cenv;
-typedef struct cval cval; 
+typedef struct cval cval;
 
 // builtin function
 typedef cval *(*cbuiltin)(cenv *, cval *);
@@ -41,8 +41,8 @@ struct cval {
 struct cenv {
     int count;
     char **symbols;
-    cval **values;
-};
+    struct cval **values;
+}; 
 
 // Forward declaration prototypes
 void cval_print(cval *value);
@@ -59,8 +59,8 @@ cenv_new()
 {
     cenv *env = (cenv *) malloc(sizeof(cenv));
     env->count = 0;
-    env->symbols = NULL;
-    env->values = NULL;
+    env->symbols = (char **) malloc(sizeof(char *));
+    env->values = (cval **) malloc(sizeof(cval *));
     return env;
 }
 
@@ -486,25 +486,25 @@ builtin_op(cenv *env, cval *expr, char* op)
 }
 
 cval *
-builtin_add(cval *env, cval *val)
+builtin_add(cenv *env, cval *val)
 {
     return builtin_op(env, val, "+");
 }
 
 cval *
-builtin_sub(cval *env, cval *val)
+builtin_sub(cenv *env, cval *val)
 {
     return builtin_op(env, val, "-");
 }
 
 cval *
-builtin_mul(cval *env, cval *val)
+builtin_mul(cenv *env, cval *val)
 {
     return builtin_op(env, val, "*");
 }
 
 cval *
-builtin_div(cval *env, cval *val)
+builtin_div(cenv *env, cval *val)
 {
     return builtin_op(env, val, "/");
 }
@@ -634,7 +634,7 @@ main(int argc, char** argv)
     printf("Press ctrl+c to exit\n");
 
     // Setup the environment
-    cenv *env = (cenv *) malloc(sizeof(cenv));
+    cenv *env = cenv_new();
     cenv_addBuiltinFunctions(env);
 
     for (;;) {
