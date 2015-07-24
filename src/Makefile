@@ -1,19 +1,22 @@
-all: prompt parser evaluator sexpr qexpr
+all: prompt parser evaluator sexpr qexpr vars funcs
 
-prompt:
+prompt: prompt.c
     gcc -std=c99 -Wall prompt.c -o prompt -ledit
 
-parser:
+parser: parser.c
 	gcc -std=c99 -Wall parser.c mpc.c -o parser -ledit -lm
 
-evaluator:
+evaluator: evaluator.c
 	gcc -std=c99 -Wall evaluator.c mpc.c -o evaluator -ledit -lm
 
-sexpr:
+sexpr: s_expressions.c
 	gcc -std=c99 -Wall s_expressions.c mpc.c -o sexpr -ledit -lm
 
-qexpr:
+qexpr: q_expressions.c
 	gcc -std=c99 -Wall q_expressions.c mpc.c -o qexpr -ledit -lm
 
-vars:
+vars: variables.c
 	gcc -std=c99 -Wall variables.c mpc.c -o vars -ledit -lm
+
+funcs: functions.c
+	gcc -std=c99 -Wall functions.c mpc.c -o funcs -ledit -lm
