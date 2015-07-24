@@ -15,19 +15,34 @@ typedef enum {
     CoolValue_Symbol,
     CoolValue_Sexpr,
     CoolValue_Qexpr,
+    CoolValue_Function,
     CoolValue_Error
 } CoolValue;
 
-typedef struct cval {
+typedef struct cenv cenv;
+typedef struct cval cval; 
+
+// builtin function
+typedef cval *(*cbuiltin)(cenv *, cval *);
+
+struct cval {
     int type;
     long number;
     char *errorString;
     char *symbolString;
     int count;
-    struct cval ** cell; // cons cells for this s-expression
+    lbuiltin fun;
+    struct cval ** cell; 
     int error;
 } cval;
 
+struct cenv {
+    int count;
+    char **symbols;
+    cval **values;
+}
+
+// Forward declaration prototypes
 void cval_print(cval *value);
 cval *cval_eval(cval *value);
 void cval_delete(cval *value);
@@ -75,6 +90,16 @@ cval_qexpr()
     return value;
 }
 
+cval *
+cval_function() 
+{
+    cval *value = (cval *) malloc(sizeof(cval));
+    value->type = CoolValue_Function;
+    value->count = 0;
+    value->cell = NULL;
+    return value;
+}
+
 cval * 
 cval_error(char *message) 
 {
@@ -103,6 +128,8 @@ cval_delete(cval *value)
                 cval_delete(value->cell[i]);
             }
             free(value->cell);
+            break;
+        case CoolValue_Function:
             break;
     }
 
@@ -157,6 +184,9 @@ cval_print(cval *value)
         case CoolValue_Qexpr:
             cval_printExpr(value, '{', '}');
             break;
+        case CoolValue_Function:
+            printf("<function>");
+            break;
     }  
 }
 
@@ -165,6 +195,40 @@ cval_println(cval *value)
 {
     cval_print(value);
     putchar('\n');
+}
+
+cval *
+cval_copy(cval *in)
+{
+    cval *copy = (cval *) malloc(sizeof(cval));
+    copy->type = in->type;
+
+    switch (in->type) {
+        case CoolValue_Function:
+            copy->function = in->function;
+            break;
+        case CoolValue_Number:
+            copy->number = in->number;
+            break;
+        case CoolValue_Error:
+            copy->errorString = (char *) malloc((strlen(in->errorString) + 1) * sizeof(char));
+            strcpy(copy->errorString, in->errorString);
+            break;
+        case CoolValue_Symbol:
+            copy->symbolString = (char *) malloc((strlen(in->symbolString) + 1) * sizeof(char));
+            strcpy(copy->symbolString, in->symbolString);
+            break;
+        case CoolValue_Sexpr:
+        case CoolValue_Qexpr:
+            copy->count = in->count;
+            copy->cell = (cval **) malloc(sizeof(cval *) * copy->count);
+            for (int i = 0; i < copy->count; i++) {
+                copy->cell[i] = cval_copy(in->cell[i]);
+            }
+            break;
+    }
+
+    return copy;
 }
 
 cval *
@@ -447,9 +511,7 @@ main(int argc, char** argv)
     mpca_lang(MPCA_LANG_DEFAULT,
         "                                                      \
             number : /-?[0-9]+/ ;                              \
-            symbol : \"list\" | \"head\" | \"tail\"            \
-                   | \"join\" | \"eval\" | '+' | '-'           \
-                   | '*' | '/' ;                               \
+            symbol : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;        \
             sexpr  : '(' <expr>* ')' ;                         \
             qexpr  : '{' <expr>* '}' ;                         \
             expr   : <number> | <symbol> | <sexpr> | <qexpr> ; \
