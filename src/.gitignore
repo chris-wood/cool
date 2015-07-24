@@ -3,4 +3,6 @@ parser
 evaluator
 s_expressions
 q_expressions
-
+qexpr
+sexpr
+vars
