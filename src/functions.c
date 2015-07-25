@@ -32,13 +32,19 @@ struct cval {
     long number;
     char *errorString;
     char *symbolString;
+
+    cbuiltin builtin;
+    cenv *env;
+    cval *formals;
+    cval *body;
+
     int count;
-    cbuiltin function;
     struct cval ** cell; 
     int error;
 };
 
 struct cenv {
+    cenv *parent;
     int count;
     char **symbols;
     struct cval **values;
@@ -50,6 +56,8 @@ cval *cval_eval(cenv *env, cval *value);
 void cval_delete(cval *value);
 cval *cval_error(char *fmt, ...);
 cval *cval_copy(cval *in);
+char *cval_typeString(int type);
+cval *builtin_eval(cenv *env, cval *x);
 
 #define CASSERT(args, cond, fmt, ...) \
     if (!(cond)) { \
@@ -58,10 +66,25 @@ cval *cval_copy(cval *in);
         return error; \
     }
 
+#define CASSERT_TYPE(func, args, index, expect) \
+    CASSERT(args, args->cell[index]->type == expect, \
+        "Function '%s' passed incorrect type for argument %i. Got %s, Expected %s.", \
+        func, index, cval_typeString(args->cell[index]->type), cval_typeString(expect));
+
+#define CASSERT_NUM(func, args, num) \
+    CASSERT(args, args->count == num, \
+        "Function '%s' passed incorrect number of arguments. Got %i, Expected %i.", \
+        func, args->count, num);
+
+#define CASSERT_NOT_EMPTY(func, args, index) \
+    CASSERT(args, args->cell[index]->count != 0, \
+        "Function '%s' passed {} for argument %i.", func, index);
+
 cenv *
 cenv_new() 
 {
     cenv *env = (cenv *) malloc(sizeof(cenv));
+    env->parent = NULL;
     env->count = 0;
     env->symbols = (char **) malloc(sizeof(char *));
     env->values = (cval **) malloc(sizeof(cval *));
@@ -88,7 +111,12 @@ cenv_get(cenv *env, cval *val)
             return cval_copy(env->values[i]);
         }
     }
-    return cval_error("Undefined symbol: %s", val->symbolString);
+
+    if (env->parent) {
+        return cenv_get(env->parent, val);
+    } else {
+        return cval_error("Undefined symbol: %s", val->symbolString);
+    }
 }
 
 void 
@@ -108,7 +136,33 @@ cenv_put(cenv *env, cval* key, cval *val)
     env->symbols = realloc(env->symbols, sizeof(char *) * env->count);
 
     env->values[env->count - 1] = cval_copy(val);
-    asprintf(&(env->symbols[env->count - 1]), "%s", key->symbolString);
+    env->symbols[env->count - 1] = malloc(strlen(key->symbolString) + 1);
+    strcpy(env->symbols[env->count - 1], key->symbolString);
+}
+
+cenv *
+cenv_copy(cenv *env)
+{
+    cenv *copy = cenv_new();
+    copy->parent = env->parent;
+    copy->count = env->count;
+    copy->symbols = (char **) malloc(sizeof(char *) * env->count);
+    copy->values = (cval **) malloc(sizeof(cval *) * env->count);
+    for (int i = 0; i < env->count; i++) {
+        copy->symbols[i] = (char *) malloc(strlen(env->symbols[i]) + 1);
+        strcpy(copy->symbols[i], env->symbols[i]);
+        copy->values[i] = cval_copy(env->values[i]);
+    }
+    return copy;
+}
+
+void
+cenv_def(cenv *env, cval *key, cval *value)
+{
+    while (env->parent != NULL) {
+        env = env->parent;
+    }
+    cenv_put(env, key, value);
 }
 
 cval *
@@ -155,9 +209,21 @@ cval_function(cbuiltin function)
 {
     cval *value = (cval *) malloc(sizeof(cval));
     value->type = CoolValue_Function;
-    value->function = function;
+    value->builtin = function;
     value->count = 0;
     value->cell = NULL;
+    return value;
+}
+
+cval *
+cval_lambda(cval *formals, cval *body)
+{
+    cval *value = (cval *) malloc(sizeof(cval));
+    value->type = CoolValue_Function;
+    value->builtin = NULL;
+    value->env = cenv_new();
+    value->formals = formals;
+    value->body = body;
     return value;
 }
 
@@ -219,6 +285,11 @@ cval_delete(cval *value)
             free(value->cell);
             break;
         case CoolValue_Function:
+            if (!value->builtin) {
+                cenv_delete(value->env);
+                cval_delete(value->formals);
+                cval_delete(value->body);
+            }
             break;
     }
 
@@ -258,7 +329,15 @@ cval_print(cval *value)
             cval_printExpr(value, '{', '}');
             break;
         case CoolValue_Function:
-            printf("<function>");
+            if (value->builtin != NULL) {
+                printf("<function>");
+            } else {
+                printf("(\\ ");
+                cval_print(value->formals);
+                printf(" ");
+                cval_print(value->body);
+                printf(" ");
+            }
             break;
     }  
 }
@@ -278,7 +357,14 @@ cval_copy(cval *in)
 
     switch (in->type) {
         case CoolValue_Function:
-            copy->function = in->function;
+            if (copy->builtin != NULL) {
+                copy->builtin = in->builtin;
+            } else {
+                copy->builtin = NULL;
+                copy->env = cenv_copy(in->env);
+                copy->formals = cval_copy(in->formals);
+                copy->body = cval_copy(in->body);
+            }
             break;
         case CoolValue_Number:
             copy->number = in->number;
@@ -392,7 +478,63 @@ cval_join(cval *x, cval *y)
 }
 
 cval *
-builtin_def(cenv *env, cval *val) 
+cval_call(cenv *env, cval *function, cval *x)
+{
+    if (function->builtin) {
+        return function->builtin(env, x);
+    }
+
+    int given = x->count;
+    int total = function->formals->count;
+
+    while (x->count > 0) {
+        if (function->formals->count == 0) {
+            cval_delete(x);
+            return cval_error("Function was given too many arguments. Got %d, expected %d", given, total);
+        }
+
+        cval *symbol = cval_pop(function->formals, 0);
+        cval *value = cval_pop(x, 0);
+        
+        cenv_put(function->env, symbol, value);
+
+        cval_delete(symbol);
+        cval_delete(value);
+    }
+
+    cval_delete(x);
+
+    if (function->formals->count == 0) {
+        function->env->parent = env;
+        return builtin_eval(function->env, cval_add(cval_sexpr(), cval_copy(function->body)));
+    } else {
+        return cval_copy(function);
+    }
+}
+
+cval *
+builtin_lambda(cenv *env, cval *x) 
+{
+    CASSERT_NUM("\\", x, 2);
+    CASSERT_TYPE("\\", x, 0, CoolValue_Qexpr);
+    CASSERT_TYPE("\\", x, 1, CoolValue_Qexpr);
+
+    for (int i = 0; i < x->cell[0]->count; i++) {
+        CASSERT(x, (x->cell[0]->cell[i]->type == CoolValue_Symbol), "Cannot define non-symbol. Got %s, Expected %s", 
+            cval_typeString(x->cell[0]->cell[i]->type), cval_typeString(CoolValue_Symbol));
+    }
+
+    cval *formals = cval_pop(x, 0);
+    cval *body = cval_pop(x, 0);
+    cval_delete(x);
+
+    cval *lambda = cval_lambda(formals, body);
+
+    return lambda;
+}
+
+cval *
+builtin_var(cenv *env, cval *val, char *function) 
 {
     CASSERT(val, val->count > 0, "Function 'def' expected non-empty variable declaration, got %d", val->count);
     CASSERT(val, val->cell[0]->type == CoolValue_Qexpr, "Function 'def' passed incorrect type, got %s", cval_typeString(val->cell[0]->type));
@@ -409,12 +551,30 @@ builtin_def(cenv *env, cval *val)
     CASSERT(val, symbols->count == val->count - 1, "Function 'def' cannot define incorrect number of values to symbols, got %d", symbols->count);
 
     for (int i = 0; i < symbols->count; i++) {
-        cenv_put(env, symbols->cell[i], val->cell[i + 1]);
+        if (strcmp(function, "def") == 0) {
+            cenv_def(env, symbols->cell[i], val->cell[i + 1]);
+        } 
+
+        if (strcmp(function, "=") == 0) {
+            cenv_put(env, symbols->cell[i], val->cell[i + 1]);
+        }
     }
 
     cval_delete(val);
 
     return cval_sexpr();
+}
+
+cval *
+builtin_def(cenv *env, cval *val)
+{
+    return builtin_var(env, val, "def");
+}
+
+cval *
+builtin_put(cenv *env, cval *val)
+{
+    return builtin_var(env, val, "put");
 }
 
 cval *
@@ -571,7 +731,9 @@ cenv_addBuiltinFunctions(cenv *env)
     cenv_addBuiltin(env, "head", builtin_head);
     cenv_addBuiltin(env, "tail", builtin_tail);
 
-    cenv_addBuiltin(env, "def",  builtin_def);
+    cenv_addBuiltin(env, "\\", builtin_lambda); 
+    cenv_addBuiltin(env, "def", builtin_def);
+    cenv_addBuiltin(env, "=", builtin_put);
 
     cenv_addBuiltin(env, "+", builtin_add);
     cenv_addBuiltin(env, "-", builtin_sub);
@@ -609,7 +771,7 @@ cval_evaluateExpression(cenv *env, cval *value)
         return cval_error("S-expression does not start with a function, got type %s", cval_typeString(funcSymbol->type));
     }
 
-    cval *result = funcSymbol->function(env, value);
+    cval *result = cval_call(env, funcSymbol, value);
     cval_delete(funcSymbol);
 
     return result;
