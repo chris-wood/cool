@@ -731,7 +731,7 @@ cenv_addBuiltinFunctions(cenv *env)
     cenv_addBuiltin(env, "head", builtin_head);
     cenv_addBuiltin(env, "tail", builtin_tail);
 
-    cenv_addBuiltin(env, "\\", builtin_lambda); 
+    cenv_addBuiltin(env, "\\", builtin_lambda);
     cenv_addBuiltin(env, "def", builtin_def);
     cenv_addBuiltin(env, "=", builtin_put);
 
