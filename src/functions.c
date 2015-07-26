@@ -58,6 +58,7 @@ cval *cval_error(char *fmt, ...);
 cval *cval_copy(cval *in);
 char *cval_typeString(int type);
 cval *builtin_eval(cenv *env, cval *x);
+cval *builtin_list(cenv *env, cval *x);
 
 #define CASSERT(args, cond, fmt, ...) \
     if (!(cond)) { \
@@ -285,7 +286,7 @@ cval_delete(cval *value)
             free(value->cell);
             break;
         case CoolValue_Function:
-            if (!value->builtin) {
+            if (value->builtin != NULL) {
                 cenv_delete(value->env);
                 cval_delete(value->formals);
                 cval_delete(value->body);
@@ -494,6 +495,20 @@ cval_call(cenv *env, cval *function, cval *x)
         }
 
         cval *symbol = cval_pop(function->formals, 0);
+
+        if (strcmp(symbol->symbolString, "&") == 0) {
+            if (function->formals->count != 1) {
+                cval_delete(x);
+                return cval_error("Function format invalid. ", "Symbol '&' not followed by single symbol.");
+            }
+
+            cval* nsym = cval_pop(function->formals, 0);
+            cenv_put(function->env, nsym, builtin_list(env, x));
+            cval_delete(symbol); 
+            cval_delete(nsym);
+            break;
+        }
+
         cval *value = cval_pop(x, 0);
         
         cenv_put(function->env, symbol, value);
@@ -504,9 +519,25 @@ cval_call(cenv *env, cval *function, cval *x)
 
     cval_delete(x);
 
+    if (function->formals->count > 0 && strcmp(function->formals->cell[0]->symbolString, "&") == 0) {
+        if (function->formals->count != 2) {
+            return cval_error("Function format invalid. ", "Symbol '&' not followed by single symbol.");
+        }
+
+        cval_delete(cval_pop(function->formals, 0));
+
+        cval* sym = cval_pop(function->formals, 0);
+        cval* val = cval_qexpr();
+
+        cenv_put(function->env, sym, val);
+        cval_delete(sym); 
+        cval_delete(val);
+    }
+
     if (function->formals->count == 0) {
         function->env->parent = env;
-        return builtin_eval(function->env, cval_add(cval_sexpr(), cval_copy(function->body)));
+        cval *newFunctionBody = cval_add(cval_sexpr(), cval_copy(function->body));
+        return builtin_eval(function->env, newFunctionBody);
     } else {
         return cval_copy(function);
     }
