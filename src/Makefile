@@ -1,4 +1,4 @@
-all: prompt parser evaluator sexpr qexpr vars funcs
+all: prompt parser evaluator sexpr qexpr vars funcs cond
 
 prompt: prompt.c
     gcc -std=c99 -Wall prompt.c -o prompt -ledit
@@ -22,4 +22,4 @@ funcs: functions.c
 	gcc -std=c99 -Wall functions.c mpc.c -o funcs -ledit -lm
 
 cond: conditions.c
-    gcc -std=c99 -Wall conditions.c mpc.c -o cond -ledit -lm
+	gcc -std=c99 -Wall conditions.c mpc.c -o cond -ledit -lm
