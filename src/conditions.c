@@ -674,6 +674,119 @@ builtin_join(cenv *env, cval *x)
     return y;
 }
 
+int 
+cval_equal(cval *x, cval *y)
+{
+    if (x->type != y->type) {
+        return 0;
+    }
+
+    switch (x->type) {
+        case CoolValue_Number:
+            return x->number == y->number;
+        case CoolValue_Symbol:
+            return strcmp(x->symbolString, y->symbolString) == 0;
+        case CoolValue_Error:
+            return strcmp(x->errorString, y->errorString) == 0;
+        case CoolValue_Function:
+            if (x->builtin || y->builtin) {
+                return x->builtin == y->builtin;
+            } else {
+                return cval_equal(x->formals, y->formals) && cval_equal(x->body, y->body);
+            }
+        case CoolValue_Sexpr:
+        case CoolValue_Qexpr:
+            if (x->count != y->count) {
+                return 0;
+            }
+            for (int i = 0; i < x->count; i++) {
+                int valuesEqual = cval_equal(x->cell[i], y->cell[i]);
+                if (valuesEqual == 0) { // values not equal
+                    return 0;
+                }
+            }
+            return 1; // must have been true, we didn't short circuit
+    }
+
+    return 0; // false by default
+}
+
+cval *
+builtin_order(cenv *env, cval *x, char *operator) 
+{
+    CASSERT_NUM(operator, x, 2);
+    CASSERT_TYPE(operator, x, 0, CoolValue_Number);
+    CASSERT_TYPE(operator, x, 1, CoolValue_Number);
+
+    int ret = 0;
+    if (strcmp(operator, ">") == 0) {
+        ret = (x->cell[0]->number > x->cell[1]->number);
+    } else if (strcmp(operator, "<") == 0) {
+        ret = (x->cell[0]->number < x->cell[1]->number);
+    } else if (strcmp(operator, ">=") == 0) {
+        ret = (x->cell[0]->number >= x->cell[1]->number);
+    } else if (strcmp(operator, "<=") == 0) {
+        ret = (x->cell[0]->number <= x->cell[1]->number);
+    } else {
+        cval_delete(x);
+        return cval_error("Error: unexpected operator in 'builtin_order': %s", operator);
+    }
+
+    cval_delete(x);
+    return cval_number(ret);
+}
+
+cval *
+builtin_gt(cenv *env, cval *x)
+{
+    return builtin_order(env, x, ">");
+}
+
+cval *
+builtin_lt(cenv *env, cval *x)
+{
+    return builtin_order(env, x, "<");
+}
+
+cval *
+builtin_gte(cenv *env, cval *x)
+{
+    return builtin_order(env, x, ">=");
+}
+
+cval *
+builtin_lte(cenv *env, cval *x)
+{
+    return builtin_order(env, x, "<=");
+}
+
+cval *
+builtin_compare(cenv *env, cval *x, char *operator) {
+    CASSERT_NUM(operator, x, 2);
+    int ret = 0;
+
+    if (strcmp(operator, "==") == 0) {
+        ret = cval_equal(x->cell[0], x->cell[1]);
+    } else if (strcmp(operator, "!=") == 0) {
+        ret = !cval_equal(x->cell[0], x->cell[1]);
+    }
+
+    cval_delete(x);
+    return cval_number(ret);
+}
+
+cval *
+builtin_equal(cenv *env, cval *x)
+{
+    return builtin_compare(env, x, "==");
+}
+
+cval *
+builtin_notequal(cenv *env, cval *x)
+{
+    return builtin_compare(env, x, "!=");
+}
+
 cval *
 builtin_op(cenv *env, cval *expr, char* op) 
 {
