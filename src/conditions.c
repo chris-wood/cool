@@ -893,6 +893,14 @@ cenv_addBuiltinFunctions(cenv *env)
     cenv_addBuiltin(env, "def", builtin_def);
     cenv_addBuiltin(env, "=", builtin_put);
 
+    cenv_addBuiltin(env, "if", builtin_if);
+    cenv_addBuiltin(env, "==", builtin_equal);
+    cenv_addBuiltin(env, "!=", builtin_notequal);
+    cenv_addBuiltin(env, ">", builtin_gt);
+    cenv_addBuiltin(env, "<", builtin_lt);
+    cenv_addBuiltin(env, ">=", builtin_gte);
+    cenv_addBuiltin(env, "<=", builtin_lte);
+
     cenv_addBuiltin(env, "list", builtin_list);
     cenv_addBuiltin(env, "eval", builtin_eval);
     cenv_addBuiltin(env, "join", builtin_join);
