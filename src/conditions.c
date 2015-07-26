@@ -788,6 +788,28 @@ builtin_notequal(cenv *env, cval *x)
 }
 
 cval *
+builtin_if(cenv *env, cval *x)
+{
+    CASSERT_NUM("if", x, 3);
+    CASSERT_TYPE("if", x, 0, CoolValue_Number);
+    CASSERT_TYPE("if", x, 1, CoolValue_Qexpr);
+    CASSERT_TYPE("if", x, 2, CoolValue_Qexpr);
+
+    cval *y;
+    x->cell[1]->type = CoolValue_Sexpr;
+    x->cell[2]->type = CoolValue_Sexpr;
+
+    if (x->cell[0]->number > 0) {
+        y = cval_eval(env, cval_pop(x, 1));
+    } else {
+        y = cval_eval(env, cval_pop(x, 2));
+    }
+
+    cval_delete(x);
+    return y;
+}
+
+cval *
 builtin_op(cenv *env, cval *expr, char* op) 
 {
     for (int i = 0; i < expr->count; i++) {
