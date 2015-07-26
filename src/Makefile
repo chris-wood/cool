@@ -20,3 +20,6 @@ vars: variables.c
 
 funcs: functions.c
 	gcc -std=c99 -Wall functions.c mpc.c -o funcs -ledit -lm
+
+cond: conditions.c
+    gcc -std=c99 -Wall conditions.c mpc.c -o cond -ledit -lm

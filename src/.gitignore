@@ -7,3 +7,4 @@ qexpr
 sexpr
 vars
 funcs
+cond
