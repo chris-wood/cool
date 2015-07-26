@@ -144,7 +144,7 @@ cenv_put(cenv *env, cval* key, cval *val)
 cenv *
 cenv_copy(cenv *env)
 {
-    cenv *copy = cenv_new();
+    cenv *copy = (cenv *) malloc(sizeof(cenv));
     copy->parent = env->parent;
     copy->count = env->count;
     copy->symbols = (char **) malloc(sizeof(char *) * env->count);
@@ -206,13 +206,11 @@ cval_qexpr()
 }
 
 cval *
-cval_function(cbuiltin function) 
+cval_builtin(cbuiltin function) 
 {
     cval *value = (cval *) malloc(sizeof(cval));
     value->type = CoolValue_Function;
     value->builtin = function;
-    value->count = 0;
-    value->cell = NULL;
     return value;
 }
 
@@ -286,7 +284,8 @@ cval_delete(cval *value)
             free(value->cell);
             break;
         case CoolValue_Function:
-            if (value->builtin != NULL) {
+            if (value->builtin == NULL) {
+                printf("deleting environment\n");
                 cenv_delete(value->env);
                 cval_delete(value->formals);
                 cval_delete(value->body);
@@ -331,7 +330,7 @@ cval_print(cval *value)
             break;
         case CoolValue_Function:
             if (value->builtin != NULL) {
-                printf("<function>");
+                printf("<builtin>");
             } else {
                 printf("(\\ ");
                 cval_print(value->formals);
@@ -358,7 +357,7 @@ cval_copy(cval *in)
 
     switch (in->type) {
         case CoolValue_Function:
-            if (copy->builtin != NULL) {
+            if (in->builtin != NULL) {
                 copy->builtin = in->builtin;
             } else {
                 copy->builtin = NULL;
@@ -747,7 +746,7 @@ void
 cenv_addBuiltin(cenv *env, char *name, cbuiltin function)
 {
     cval *key = cval_symbol(name);
-    cval *value = cval_function(function);
+    cval *value = cval_builtin(function);
     cenv_put(env, key, value);
     cval_delete(key);
     cval_delete(value);
@@ -756,15 +755,15 @@ cenv_addBuiltin(cenv *env, char *name, cbuiltin function)
 void 
 cenv_addBuiltinFunctions(cenv *env) 
 {
+    cenv_addBuiltin(env, "\\", builtin_lambda);
+    cenv_addBuiltin(env, "def", builtin_def);
+    cenv_addBuiltin(env, "=", builtin_put);
+
     cenv_addBuiltin(env, "list", builtin_list);
     cenv_addBuiltin(env, "eval", builtin_eval);
     cenv_addBuiltin(env, "join", builtin_join);
     cenv_addBuiltin(env, "head", builtin_head);
     cenv_addBuiltin(env, "tail", builtin_tail);
-
-    cenv_addBuiltin(env, "\\", builtin_lambda);
-    cenv_addBuiltin(env, "def", builtin_def);
-    cenv_addBuiltin(env, "=", builtin_put);
 
     cenv_addBuiltin(env, "+", builtin_add);
     cenv_addBuiltin(env, "-", builtin_sub);
