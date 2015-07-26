@@ -285,7 +285,6 @@ cval_delete(cval *value)
             break;
         case CoolValue_Function:
             if (value->builtin == NULL) {
-                printf("deleting environment\n");
                 cenv_delete(value->env);
                 cval_delete(value->formals);
                 cval_delete(value->body);
