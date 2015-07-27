@@ -23,3 +23,6 @@ funcs: functions.c
 
 cond: conditions.c
 	gcc -std=c99 -Wall conditions.c mpc.c -o cond -ledit -lm
+
+strings: strings.c
+	gcc -std=c99 -Wall strings.c mpc.c -o cond -ledit -lm
