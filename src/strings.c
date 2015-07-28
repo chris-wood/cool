@@ -12,6 +12,7 @@ typedef enum {
 
 typedef enum {
     CoolValue_Number,
+    CoolValue_String,
     CoolValue_Symbol,
     CoolValue_Sexpr,
     CoolValue_Qexpr,
@@ -32,6 +33,7 @@ struct cval {
     long number;
     char *errorString;
     char *symbolString;
+    char *string;
 
     cbuiltin builtin;
     cenv *env;
@@ -176,6 +178,16 @@ cval_number(long x)
 }
 
 cval *
+cval_string(char *str)
+{
+    cval *value = (cval *) malloc(sizeof(cval));
+    value->type = CoolValue_String;
+    value->string = (char *) malloc((strlen(str) + 1) * sizeof(char));
+    strcpy(value->string, str);
+    return value;
+}
+
+cval *
 cval_symbol(char *symbol) 
 {
     cval *value = (cval *) malloc(sizeof(cval));
@@ -240,6 +252,8 @@ cval_typeString(int type)
             return "CoolValue_Sexpr";
         case CoolValue_Number:
             return "CoolValue_Number";
+        case CoolValue_String:
+            return "CoolValue_String";
         case CoolValue_Symbol:
         default:
             return "CoolValue_Symbol";
@@ -269,6 +283,9 @@ cval_delete(cval *value)
 {
     switch (value->type) {
         case CoolValue_Number:
+            break;
+        case CoolValue_String:
+            free(value->string);
             break;
         case CoolValue_Error:
             free(value->errorString);
@@ -314,6 +331,9 @@ cval_print(cval *value)
     switch (value->type) {
         case CoolValue_Number: 
             printf("%li", value->number);
+            break;
+        case CoolValue_String: 
+            printf("'%s'", value->string);
             break;
         case CoolValue_Error:
             printf("Error: %s", value->errorString); 
@@ -368,6 +388,10 @@ cval_copy(cval *in)
         case CoolValue_Number:
             copy->number = in->number;
             break;
+        case CoolValue_String: 
+            copy->string = (char *) malloc((strlen(in->string) + 1) * sizeof(char));
+            strcpy(copy->string, in->string);
+            break;
         case CoolValue_Error:
             copy->errorString = (char *) malloc((strlen(in->errorString) + 1) * sizeof(char));
             strcpy(copy->errorString, in->errorString);
@@ -399,10 +423,23 @@ cval_add(cval *value, cval *x)
 }
 
 cval * 
-cval_read_num(mpc_ast_t* t) {
+cval_read_num(mpc_ast_t* t) 
+{
     errno = 0;
     long x = strtol(t->contents, NULL, 10);
     return errno != ERANGE ? cval_number(x) : cval_error("invalid number");
+}
+
+cval *
+cval_readString(mpc_ast_t *t)
+{
+    t->contents[strlen(t->contents) - 1] = '\0';
+    char *unescaped = (char *) malloc(strlen(t->contents + 1) + 1); // quote at start and end
+    strcpy(unescaped, t->contents + 1);
+    unescaped = mpcf_unescape(unescaped); // drop quotes
+    cval *string = cval_string(unescaped);
+    free(unescaped);
+    return string;
 }
 
 cval *
@@ -413,6 +450,9 @@ cval_read(mpc_ast_t *t)
     }
     if (strstr(t->tag, "symbol")) {
         return cval_symbol(t->contents);
+    }
+    if (strstr(t->tag, "string")) {
+        return cval_readString(t);
     }
 
     cval *x = NULL;
@@ -684,10 +724,12 @@ cval_equal(cval *x, cval *y)
     switch (x->type) {
         case CoolValue_Number:
             return x->number == y->number;
+        case CoolValue_String:
+            return (strcmp(x->string, y->string) == 0);
         case CoolValue_Symbol:
-            return strcmp(x->symbolString, y->symbolString) == 0;
+            return (strcmp(x->symbolString, y->symbolString) == 0);
         case CoolValue_Error:
-            return strcmp(x->errorString, y->errorString) == 0;
+            return (strcmp(x->errorString, y->errorString) == 0);
         case CoolValue_Function:
             if (x->builtin || y->builtin) {
                 return x->builtin == y->builtin;
@@ -966,6 +1008,7 @@ int
 main(int argc, char** argv) 
 {
     mpc_parser_t* Number = mpc_new("number");
+    mpc_parser_t* String = mpc_new("string");
     mpc_parser_t* Symbol = mpc_new("symbol");
     mpc_parser_t* Sexpr = mpc_new("sexpr");
     mpc_parser_t* Qexpr = mpc_new("qexpr");
@@ -975,13 +1018,14 @@ main(int argc, char** argv)
     mpca_lang(MPCA_LANG_DEFAULT,
         "                                                      \
             number : /-?[0-9]+/ ;                              \
+            string : /\"(\\\\.|[^\"])*\"/ ;                    \
             symbol : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;        \
             sexpr  : '(' <expr>* ')' ;                         \
             qexpr  : '{' <expr>* '}' ;                         \
             expr   : <number> | <symbol> | <sexpr> | <qexpr> ; \
             cool   : /^/ <expr>* /$/ ;                         \
         ",
-        Number, Symbol, Sexpr, Qexpr, Expr, Cool);
+        Number, String, Symbol, Sexpr, Qexpr, Expr, Cool);
 
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
@@ -1010,7 +1054,7 @@ main(int argc, char** argv)
     
     cenv_delete(env);
 
-    mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, Cool);
+    mpc_cleanup(7, Number, String, Symbol, Sexpr, Qexpr, Expr, Cool);
 
     return 0;
 }
