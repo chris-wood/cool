@@ -62,6 +62,16 @@ char *cval_typeString(int type);
 cval *builtin_eval(cenv *env, cval *x);
 cval *builtin_list(cenv *env, cval *x);
 
+// Parsing grammars
+mpc_parser_t* Number;
+mpc_parser_t* Symbol;
+mpc_parser_t* String;
+mpc_parser_t* Comment;
+mpc_parser_t* Sexpr;
+mpc_parser_t* Qexpr;
+mpc_parser_t* Expr;
+mpc_parser_t* Cool;
+
 #define CASSERT(args, cond, fmt, ...) \
     if (!(cond)) { \
         cval *error = cval_error(fmt, ##__VA_ARGS__); \
@@ -480,6 +490,9 @@ cval_read(mpc_ast_t *t)
             continue;
         }
         if (strcmp(t->children[i]->tag, "regex") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->tag, "comment") == 0) {
             continue;
         }
         x = cval_add(x, cval_read(t->children[i]));
@@ -918,6 +931,65 @@ builtin_div(cenv *env, cval *val)
     return builtin_op(env, val, "/");
 }
 
+cval *
+builtin_load(cenv *env, cval *x)
+{
+    CASSERT_NUM("load", x, 1);
+    CASSERT_TYPE("load", x, 0, CoolValue_String);
+
+    mpc_result_t result;
+    if (mpc_parse_contents(x->cell[0]->string, Cool, &result)) {
+        
+        cval *expr = cval_read(result.output);
+        mpc_ast_delete(result.output);
+
+        while (expr->count > 0) {
+            cval *y = cval_eval(env, cval_pop(expr, 0));
+            if (y->type == CoolValue_Error) {
+                cval_println(y);
+            } 
+            cval_delete(y);
+        }
+
+        cval_delete(expr);
+        cval_delete(x);
+
+        return cval_sexpr();
+    } else { // parsing error
+        char *errorMessage = mpc_err_string(result.error);
+        mpc_err_delete(result.error);
+
+        cval *error = cval_error("Could not load library %s", errorMessage);
+        free(errorMessage);
+        cval_delete(x);
+
+        return error;
+    }
+}
+
+cval * 
+builtin_print(cenv *env, cval *x)
+{
+    for (int i = 0; i < x->count; i++) {
+        cval_print(x->cell[i]);
+        putchar(' ');
+    }
+    putchar('\n');
+    cval_delete(x);
+
+    return cval_sexpr();
+}
+
+cval *
+builtin_error(cenv *env, cval *x)
+{
+    CASSERT_NUM("error", x, 1);
+    CASSERT_TYPE("error", x, 0, CoolValue_String);
+    cval *error = cval_error(x->cell[0]->string);
+    cval_delete(x);
+    return error;
+}
+
 void
 cenv_addBuiltin(cenv *env, char *name, cbuiltin function)
 {
@@ -931,6 +1003,10 @@ cenv_addBuiltin(cenv *env, char *name, cbuiltin function)
 void 
 cenv_addBuiltinFunctions(cenv *env) 
 {
+    cenv_addBuiltin(env, "load", builtin_load);
+    cenv_addBuiltin(env, "print", builtin_print);
+    cenv_addBuiltin(env, "error", builtin_error);
+
     cenv_addBuiltin(env, "\\", builtin_lambda);
     cenv_addBuiltin(env, "def", builtin_def);
     cenv_addBuiltin(env, "=", builtin_put);
@@ -1007,14 +1083,14 @@ cval_eval(cenv* env, cval *value)
 int 
 main(int argc, char** argv) 
 {
-    mpc_parser_t* Number = mpc_new("number");
-    mpc_parser_t* Symbol = mpc_new("symbol");
-    mpc_parser_t* String = mpc_new("string");
-    mpc_parser_t* Comment = mpc_new("comment");
-    mpc_parser_t* Sexpr = mpc_new("sexpr");
-    mpc_parser_t* Qexpr = mpc_new("qexpr");
-    mpc_parser_t* Expr = mpc_new("expr");
-    mpc_parser_t* Cool = mpc_new("cool");
+    Number = mpc_new("number");
+    Symbol = mpc_new("symbol");
+    String = mpc_new("string");
+    Comment = mpc_new("comment");
+    Sexpr = mpc_new("sexpr");
+    Qexpr = mpc_new("qexpr");
+    Expr = mpc_new("expr");
+    Cool = mpc_new("cool");
 
     mpca_lang(MPCA_LANG_DEFAULT,
         "                                                       \
@@ -1036,6 +1112,18 @@ main(int argc, char** argv)
     // Setup the environment
     cenv *env = cenv_new();
     cenv_addBuiltinFunctions(env);
+
+    // Handle command line arguments
+    if (argc > 1) {
+        for (int i = 1; i < argc; i++) {
+            cval *args = cval_add(cval_sexpr(), cval_string(argv[i]));
+            cval *x = builtin_load(env, args);
+            if (x->type == CoolValue_Error) {
+                cval_println(x);
+            }
+            cval_delete(x);
+        }
+    }
 
     for (;;) {
         char* input = readline("COOL> ");
