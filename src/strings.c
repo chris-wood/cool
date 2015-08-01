@@ -944,7 +944,8 @@ builtin_load(cenv *env, cval *x)
         mpc_ast_delete(result.output);
 
         while (expr->count > 0) {
-            cval *y = cval_eval(env, cval_pop(expr, 0));
+            cval *top = cval_pop(expr, 0);
+            cval *y = cval_eval(env, top);
             if (y->type == CoolValue_Error) {
                 cval_println(y);
             } 
@@ -1131,7 +1132,8 @@ main(int argc, char** argv)
 
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
-            cval * x = cval_eval(env, cval_read(r.output));
+            cval *input = cval_read(r.output);
+            cval *x = cval_eval(env, input);
             cval_println(x);
             cval_delete(x);
             mpc_ast_delete(r.output);
