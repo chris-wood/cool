@@ -32,6 +32,7 @@ typedef cval *(*cbuiltin)(cenv *, cval *);
 struct cval {
     int type;
     long number;
+    double fpnumber;
     char *errorString;
     char *symbolString;
     char *string;
@@ -185,6 +186,15 @@ cval_longInteger(long x)
     cval *value = (cval *) malloc(sizeof(cval));
     value->type = CoolValue_LongInteger;
     value->number = x;
+    return value;
+}
+
+cval *
+cval_double(double x)
+{
+    cval *value = (cval *) malloc(sizeof(cval));
+    value->type = CoolValue_Double;
+    value->fpnumber = x;
     return value;
 }
 
