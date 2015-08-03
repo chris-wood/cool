@@ -12,6 +12,7 @@ typedef enum {
 
 typedef enum {
     CoolValue_LongInteger,
+    CoolValue_Double,
     CoolValue_String,
     CoolValue_Symbol,
     CoolValue_Sexpr,
