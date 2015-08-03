@@ -66,7 +66,6 @@ cval *builtin_list(cenv *env, cval *x);
 
 // Parsing grammars
 mpc_parser_t* Number;
-mpc_parser_t* FloatingNumber;
 mpc_parser_t* Symbol;
 mpc_parser_t* String;
 mpc_parser_t* Comment;
@@ -461,6 +460,18 @@ cval_read_fpnumber(mpc_ast_t* t)
 }
 
 cval *
+cval_read_number(mpc_ast_t* t)
+{
+    if (strstr(t->tag, ".")) { // floating point
+        printf("Parsing double...\n");
+        return cval_read_fpnumber(t);
+    } else { // integer
+        printf("Parsing long...\n");
+        return cval_read_num(t);
+    }
+}
+
+cval *
 cval_readString(mpc_ast_t *t)
 {
     t->contents[strlen(t->contents) - 1] = '\0';
@@ -476,10 +487,7 @@ cval *
 cval_read(mpc_ast_t *t) 
 {
     if (strstr(t->tag, "number")) {
-        return cval_read_num(t);
-    }
-    if (strstr(t->tag, "fpnumber")) {
-        return cval_read_fpnumber(t);
+        return cval_read_number(t);
     }
     if (strstr(t->tag, "symbol")) {
         return cval_symbol(t->contents);
@@ -1108,7 +1116,6 @@ int
 main(int argc, char** argv) 
 {
     Number = mpc_new("number");
-    FloatingNumber = mpc_new("fpnumber");
     Symbol = mpc_new("symbol");
     String = mpc_new("string");
     Comment = mpc_new("comment");
@@ -1119,18 +1126,18 @@ main(int argc, char** argv)
 
     mpca_lang(MPCA_LANG_DEFAULT,
         "                                                       \
-            number  : /-?[0-9]+/ ;                              \
-            fpnumber : /[-+]?[0-9]*\.?[0-9]+/ ;                 \ 
+            number : /[-+]?[0-9]+(\\.[0-9]+)?/ ;              \
             symbol  : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;        \
             string  : /\"(\\\\.|[^\"])*\"/ ;                    \
             comment : /;[^\\r\\n]*/ ;                           \
             sexpr   : '(' <expr>* ')' ;                         \
             qexpr   : '{' <expr>* '}' ;                         \
-            expr    : <number> | <symbol> | <sexpr> |           \
-                      <qexpr> | <string> | <comment> ;          \
+            expr    : <number> | <symbol> |        \
+                     <sexpr> | <qexpr> | <string> | <comment> ; \
             cool    : /^/ <expr>* /$/ ;                         \
         ",
-        Number, FloatingNumber, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
+        Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
+    // number  : /-?[0-9]+/ ;                              
 
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
@@ -1172,7 +1179,7 @@ main(int argc, char** argv)
     
     cenv_delete(env);
 
-    mpc_cleanup(8, Number, FloatingNumber, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
+    mpc_cleanup(8, Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
 
     return 0;
 }
