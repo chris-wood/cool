@@ -66,6 +66,7 @@ cval *builtin_list(cenv *env, cval *x);
 
 // Parsing grammars
 mpc_parser_t* Number;
+mpc_parser_t* FloatingNumber;
 mpc_parser_t* Symbol;
 mpc_parser_t* String;
 mpc_parser_t* Comment;
