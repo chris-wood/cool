@@ -11,7 +11,7 @@ typedef enum {
 } CoolValueError;
 
 typedef enum {
-    CoolValue_Number,
+    CoolValue_LongInteger,
     CoolValue_String,
     CoolValue_Symbol,
     CoolValue_Sexpr,
@@ -179,10 +179,10 @@ cenv_def(cenv *env, cval *key, cval *value)
 }
 
 cval *
-cval_number(long x) 
+cval_longInteger(long x) 
 {
     cval *value = (cval *) malloc(sizeof(cval));
-    value->type = CoolValue_Number;
+    value->type = CoolValue_LongInteger;
     value->number = x;
     return value;
 }
@@ -260,8 +260,8 @@ cval_typeString(int type)
             return "CoolValue_Qexpr";
         case CoolValue_Sexpr:
             return "CoolValue_Sexpr";
-        case CoolValue_Number:
-            return "CoolValue_Number";
+        case CoolValue_LongInteger:
+            return "CoolValue_LongInteger";
         case CoolValue_String:
             return "CoolValue_String";
         case CoolValue_Symbol:
@@ -292,7 +292,7 @@ void
 cval_delete(cval *value)
 {
     switch (value->type) {
-        case CoolValue_Number:
+        case CoolValue_LongInteger:
             break;
         case CoolValue_String:
             free(value->string);
@@ -339,7 +339,7 @@ void
 cval_print(cval *value) 
 {
     switch (value->type) {
-        case CoolValue_Number: 
+        case CoolValue_LongInteger: 
             printf("%li", value->number);
             break;
         case CoolValue_String: 
@@ -395,7 +395,7 @@ cval_copy(cval *in)
                 copy->body = cval_copy(in->body);
             }
             break;
-        case CoolValue_Number:
+        case CoolValue_LongInteger:
             copy->number = in->number;
             break;
         case CoolValue_String: 
@@ -437,7 +437,7 @@ cval_read_num(mpc_ast_t* t)
 {
     errno = 0;
     long x = strtol(t->contents, NULL, 10);
-    return errno != ERANGE ? cval_number(x) : cval_error("invalid number");
+    return errno != ERANGE ? cval_longInteger(x) : cval_error("invalid number");
 }
 
 cval *
@@ -735,7 +735,7 @@ cval_equal(cval *x, cval *y)
     }
 
     switch (x->type) {
-        case CoolValue_Number:
+        case CoolValue_LongInteger:
             return x->number == y->number;
         case CoolValue_String:
             return (strcmp(x->string, y->string) == 0);
@@ -770,8 +770,8 @@ cval *
 builtin_order(cenv *env, cval *x, char *operator) 
 {
     CASSERT_NUM(operator, x, 2);
-    CASSERT_TYPE(operator, x, 0, CoolValue_Number);
-    CASSERT_TYPE(operator, x, 1, CoolValue_Number);
+    CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger);
+    CASSERT_TYPE(operator, x, 1, CoolValue_LongInteger);
 
     int ret = 0;
     if (strcmp(operator, ">") == 0) {
@@ -788,7 +788,7 @@ builtin_order(cenv *env, cval *x, char *operator)
     }
 
     cval_delete(x);
-    return cval_number(ret);
+    return cval_longInteger(ret);
 }
 
 cval *
@@ -827,7 +827,7 @@ builtin_compare(cenv *env, cval *x, char *operator) {
     }
 
     cval_delete(x);
-    return cval_number(ret);
+    return cval_longInteger(ret);
 }
 
 cval *
@@ -846,7 +846,7 @@ cval *
 builtin_if(cenv *env, cval *x)
 {
     CASSERT_NUM("if", x, 3);
-    CASSERT_TYPE("if", x, 0, CoolValue_Number);
+    CASSERT_TYPE("if", x, 0, CoolValue_LongInteger);
     CASSERT_TYPE("if", x, 1, CoolValue_Qexpr);
     CASSERT_TYPE("if", x, 2, CoolValue_Qexpr);
 
@@ -868,7 +868,7 @@ cval *
 builtin_op(cenv *env, cval *expr, char* op) 
 {
     for (int i = 0; i < expr->count; i++) {
-        if (expr->cell[i]->type != CoolValue_Number) {
+        if (expr->cell[i]->type != CoolValue_LongInteger) {
             cval_delete(expr);
             return cval_error("Cannot operate on a non-number, got type %s", cval_typeString(expr->cell[i]->type));
         }
