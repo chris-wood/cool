@@ -452,6 +452,14 @@ cval_read_num(mpc_ast_t* t)
 }
 
 cval *
+cval_read_fpnumber(mpc_ast_t* t)
+{
+    errno = 0;
+    double x = atof(t->contents);
+    return cval_double(x);
+}
+
+cval *
 cval_readString(mpc_ast_t *t)
 {
     t->contents[strlen(t->contents) - 1] = '\0';
@@ -468,6 +476,9 @@ cval_read(mpc_ast_t *t)
 {
     if (strstr(t->tag, "number")) {
         return cval_read_num(t);
+    }
+    if (strstr(t->tag, "fpnumber")) {
+        return cval_read_fpnumber(t);
     }
     if (strstr(t->tag, "symbol")) {
         return cval_symbol(t->contents);
@@ -1096,6 +1107,7 @@ int
 main(int argc, char** argv) 
 {
     Number = mpc_new("number");
+    FloatingNumber = mpc_new("fpnumber");
     Symbol = mpc_new("symbol");
     String = mpc_new("string");
     Comment = mpc_new("comment");
@@ -1107,6 +1119,7 @@ main(int argc, char** argv)
     mpca_lang(MPCA_LANG_DEFAULT,
         "                                                       \
             number  : /-?[0-9]+/ ;                              \
+            fpnumber : /[-+]?[0-9]*\.?[0-9]+/ ;                 \ 
             symbol  : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;        \
             string  : /\"(\\\\.|[^\"])*\"/ ;                    \
             comment : /;[^\\r\\n]*/ ;                           \
@@ -1116,7 +1129,7 @@ main(int argc, char** argv)
                       <qexpr> | <string> | <comment> ;          \
             cool    : /^/ <expr>* /$/ ;                         \
         ",
-        Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
+        Number, FloatingNumber, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
 
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
@@ -1158,7 +1171,7 @@ main(int argc, char** argv)
     
     cenv_delete(env);
 
-    mpc_cleanup(8, Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
+    mpc_cleanup(8, Number, FloatingNumber, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
 
     return 0;
 }
