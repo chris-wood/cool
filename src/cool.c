@@ -273,6 +273,8 @@ cval_typeString(int type)
             return "CoolValue_Sexpr";
         case CoolValue_LongInteger:
             return "CoolValue_LongInteger";
+        case CoolValue_Double:
+            return "CoolValue_Double";
         case CoolValue_String:
             return "CoolValue_String";
         case CoolValue_Symbol:
@@ -304,6 +306,7 @@ cval_delete(cval *value)
 {
     switch (value->type) {
         case CoolValue_LongInteger:
+        case CoolValue_Double:
             break;
         case CoolValue_String:
             free(value->string);
@@ -352,6 +355,9 @@ cval_print(cval *value)
     switch (value->type) {
         case CoolValue_LongInteger: 
             printf("%li", value->number);
+            break;
+        case CoolValue_Double: 
+            printf("%f", value->fpnumber);
             break;
         case CoolValue_String: 
             printf("'%s'", value->string);
@@ -409,6 +415,9 @@ cval_copy(cval *in)
         case CoolValue_LongInteger:
             copy->number = in->number;
             break;
+        case CoolValue_Double:
+            copy->fpnumber = in->fpnumber;
+            break;
         case CoolValue_String: 
             copy->string = (char *) malloc((strlen(in->string) + 1) * sizeof(char));
             strcpy(copy->string, in->string);
@@ -462,11 +471,9 @@ cval_read_fpnumber(mpc_ast_t* t)
 cval *
 cval_read_number(mpc_ast_t* t)
 {
-    if (strstr(t->tag, ".")) { // floating point
-        printf("Parsing double...\n");
+    if (strstr(t->contents, ".")) {
         return cval_read_fpnumber(t);
-    } else { // integer
-        printf("Parsing long...\n");
+    } else {
         return cval_read_num(t);
     }
 }
@@ -768,6 +775,8 @@ cval_equal(cval *x, cval *y)
     switch (x->type) {
         case CoolValue_LongInteger:
             return x->number == y->number;
+        case CoolValue_Double:
+            return x->fpnumber == y->fpnumber;
         case CoolValue_String:
             return (strcmp(x->string, y->string) == 0);
         case CoolValue_Symbol:
@@ -797,12 +806,19 @@ cval_equal(cval *x, cval *y)
     return 0; // false by default
 }
 
+// TODO: order function for Doubles
+
 cval *
 builtin_order(cenv *env, cval *x, char *operator) 
 {
     CASSERT_NUM(operator, x, 2);
-    CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger);
-    CASSERT_TYPE(operator, x, 1, CoolValue_LongInteger);
+    if (x->cell[0]->type == CoolValue_LongInteger) {
+        CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger);
+        CASSERT_TYPE(operator, x, 1, CoolValue_LongInteger);    
+    } else {
+        CASSERT_TYPE(operator, x, 0, CoolValue_Double);
+        CASSERT_TYPE(operator, x, 1, CoolValue_Double);
+    }
 
     int ret = 0;
     if (strcmp(operator, ">") == 0) {
@@ -1125,19 +1141,23 @@ main(int argc, char** argv)
     Cool = mpc_new("cool");
 
     mpca_lang(MPCA_LANG_DEFAULT,
-        "                                                       \
-            number : /[-+]?[0-9]+(\\.[0-9]+)?/ ;              \
-            symbol  : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;        \
+        "   \
+            number   : /[+-]?[0-9]+[.]?[0-9]*/ ; \
+            symbol  : /[a-zA-Z_][a-zA-Z0-9_!]*/ ;               \
             string  : /\"(\\\\.|[^\"])*\"/ ;                    \
             comment : /;[^\\r\\n]*/ ;                           \
             sexpr   : '(' <expr>* ')' ;                         \
             qexpr   : '{' <expr>* '}' ;                         \
-            expr    : <number> | <symbol> |        \
-                     <sexpr> | <qexpr> | <string> | <comment> ; \
+            expr    : <number> | <symbol> | <sexpr> | <qexpr>   \
+                    | <string> | <comment>  ;          \
             cool    : /^/ <expr>* /$/ ;                         \
         ",
         Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
-    // number  : /-?[0-9]+/ ;                              
+    
+    // Old number regex
+    // number  : /-?[0-9]+/ ;
+    // ^[-+]?[0-9]+\.[0-9]+$
+    // float   : /<number>('.'[0-9]+)?/ ; 
 
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
@@ -1165,6 +1185,7 @@ main(int argc, char** argv)
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
             cval *input = cval_read(r.output);
+            cval_println(input);
             cval *x = cval_eval(env, input);
             cval_println(x);
             cval_delete(x);
