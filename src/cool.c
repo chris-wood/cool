@@ -806,20 +806,30 @@ cval_equal(cval *x, cval *y)
     return 0; // false by default
 }
 
-// TODO: order function for Doubles
-
 cval *
-builtin_order(cenv *env, cval *x, char *operator) 
+builtin_double_order(cenv *env, cval *x, char *operator) 
 {
-    CASSERT_NUM(operator, x, 2);
-    if (x->cell[0]->type == CoolValue_LongInteger) {
-        CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger);
-        CASSERT_TYPE(operator, x, 1, CoolValue_LongInteger);    
+    int ret = 0;
+    if (strcmp(operator, ">") == 0) {
+        ret = (x->cell[0]->fpnumber > x->cell[1]->fpnumber);
+    } else if (strcmp(operator, "<") == 0) {
+        ret = (x->cell[0]->fpnumber < x->cell[1]->fpnumber);
+    } else if (strcmp(operator, ">=") == 0) {
+        ret = (x->cell[0]->fpnumber >= x->cell[1]->fpnumber);
+    } else if (strcmp(operator, "<=") == 0) {
+        ret = (x->cell[0]->fpnumber <= x->cell[1]->fpnumber);
     } else {
-        CASSERT_TYPE(operator, x, 0, CoolValue_Double);
-        CASSERT_TYPE(operator, x, 1, CoolValue_Double);
+        cval_delete(x);
+        return cval_error("Error: unexpected operator in 'builtin_order': %s", operator);
     }
 
+    cval_delete(x);
+    return cval_double(ret);
+}
+
+cval *
+builtin_long_order(cenv *env, cval *x, char *operator) 
+{
     int ret = 0;
     if (strcmp(operator, ">") == 0) {
         ret = (x->cell[0]->number > x->cell[1]->number);
@@ -836,6 +846,21 @@ builtin_order(cenv *env, cval *x, char *operator)
 
     cval_delete(x);
     return cval_longInteger(ret);
+}
+
+cval *
+builtin_order(cenv *env, cval *x, char *operator) 
+{
+    CASSERT_NUM(operator, x, 2);
+    if (x->cell[0]->type == CoolValue_LongInteger) {
+        CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger);
+        CASSERT_TYPE(operator, x, 1, CoolValue_LongInteger);    
+        return builtin_long_order(env, x, operator);
+    } else {
+        CASSERT_TYPE(operator, x, 0, CoolValue_Double);
+        CASSERT_TYPE(operator, x, 1, CoolValue_Double);
+        return builtin_double_order(env, x, operator);
+    }
 }
 
 cval *
