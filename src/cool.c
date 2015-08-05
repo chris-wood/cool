@@ -940,7 +940,7 @@ cval *
 builtin_op(cenv *env, cval *expr, char* op) 
 {
     for (int i = 0; i < expr->count; i++) {
-        if (expr->cell[i]->type != CoolValue_LongInteger) {
+        if (expr->cell[i]->type != CoolValue_LongInteger && expr->cell[i]->type != CoolValue_Double) {
             cval_delete(expr);
             return cval_error("Cannot operate on a non-number, got type %s", cval_typeString(expr->cell[i]->type));
         }
