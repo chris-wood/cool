@@ -1101,7 +1101,8 @@ cenv_addBuiltinFunctions(cenv *env)
     cenv_addBuiltin(env, "+", builtin_add);
     cenv_addBuiltin(env, "-", builtin_sub);
     cenv_addBuiltin(env, "*", builtin_mul);
-    cenv_addBuiltin(env, "/", builtin_div);    
+    cenv_addBuiltin(env, "/", builtin_div);
+    // caw: xor, exponentation, etc
 }
 
 cval *
