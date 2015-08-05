@@ -824,7 +824,7 @@ builtin_double_order(cenv *env, cval *x, char *operator)
     }
 
     cval_delete(x);
-    return cval_double(ret);
+    return cval_longInteger(ret);
 }
 
 cval *
@@ -1168,8 +1168,8 @@ main(int argc, char** argv)
 
     mpca_lang(MPCA_LANG_DEFAULT,
         "   \
-            number   : /[+-]?[0-9]+[.]?[0-9]*/ ; \
-            symbol  : /[a-zA-Z_][a-zA-Z0-9_!]*/ ;               \
+            number  : /[+-]?[0-9]+[.]?[0-9]*/ ; \
+            symbol  : /[a-zA-Z_+\\-*\\/\\\\=<>!&][a-zA-Z0-9_+\\-*\\/\\\\=<>!&]*/ ; \
             string  : /\"(\\\\.|[^\"])*\"/ ;                    \
             comment : /;[^\\r\\n]*/ ;                           \
             sexpr   : '(' <expr>* ')' ;                         \
