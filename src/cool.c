@@ -13,6 +13,7 @@ typedef enum {
 typedef enum {
     CoolValue_LongInteger,
     CoolValue_Double,
+    CoolValue_Byte,
     CoolValue_String,
     CoolValue_Symbol,
     CoolValue_Sexpr,
@@ -33,6 +34,7 @@ struct cval {
     int type;
     long number;
     double fpnumber;
+
     char *errorString;
     char *symbolString;
     char *string;
@@ -82,7 +84,7 @@ mpc_parser_t* Cool;
     }
 
 #define CASSERT_TYPE(func, args, index, expect) \
-    CASSERT(args, args->cell[index]->type == expect, \
+    CASSERT(args, (args->cell[index]->type & expect) > 1, \
         "Function '%s' passed incorrect type for argument %i. Got %s, Expected %s.", \
         func, index, cval_typeString(args->cell[index]->type), cval_typeString(expect));
 
@@ -199,6 +201,15 @@ cval_double(double x)
 }
 
 cval *
+cval_byte(char x)
+{
+    cval *value = (cval *) malloc(sizeof(cval));
+    value->type = CoolValue_Byte;
+    value->number = (long) x;
+    return value;
+}
+
+cval *
 cval_string(char *str)
 {
     cval *value = (cval *) malloc(sizeof(cval));
@@ -275,6 +286,8 @@ cval_typeString(int type)
             return "CoolValue_LongInteger";
         case CoolValue_Double:
             return "CoolValue_Double";
+        case CoolValue_Byte:
+            return "CoolValue_Byte";
         case CoolValue_String:
             return "CoolValue_String";
         case CoolValue_Symbol:
@@ -307,6 +320,7 @@ cval_delete(cval *value)
     switch (value->type) {
         case CoolValue_LongInteger:
         case CoolValue_Double:
+        case CoolValue_Byte:
             break;
         case CoolValue_String:
             free(value->string);
@@ -358,6 +372,9 @@ cval_print(cval *value)
             break;
         case CoolValue_Double: 
             printf("%f", value->fpnumber);
+            break;
+        case CoolValue_Byte:
+            printf("%x", (uint8_t) value->number);
             break;
         case CoolValue_String: 
             printf("'%s'", value->string);
@@ -413,6 +430,7 @@ cval_copy(cval *in)
             }
             break;
         case CoolValue_LongInteger:
+        case CoolValue_Byte:
             copy->number = in->number;
             break;
         case CoolValue_Double:
@@ -774,6 +792,7 @@ cval_equal(cval *x, cval *y)
 
     switch (x->type) {
         case CoolValue_LongInteger:
+        case CoolValue_Byte:
             return x->number == y->number;
         case CoolValue_Double:
             return x->fpnumber == y->fpnumber;
@@ -852,9 +871,9 @@ cval *
 builtin_order(cenv *env, cval *x, char *operator) 
 {
     CASSERT_NUM(operator, x, 2);
-    if (x->cell[0]->type == CoolValue_LongInteger) {
-        CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger);
-        CASSERT_TYPE(operator, x, 1, CoolValue_LongInteger);    
+    if (x->cell[0]->type == CoolValue_LongInteger || x->cell[0]->type == CoolValue_Byte) {
+        CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger | CoolValue_Byte);
+        CASSERT_TYPE(operator, x, 1, CoolValue_LongInteger | CoolValue_Byte);
         return builtin_long_order(env, x, operator);
     } else {
         CASSERT_TYPE(operator, x, 0, CoolValue_Double);
