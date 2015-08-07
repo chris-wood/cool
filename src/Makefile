@@ -1,4 +1,8 @@
+CC=gcc
+CFLAGS=-std=c99 -Wall
+LIBRARIES=-ledit -lm
+
 all: cool
 
 cool: cool.c
-	gcc -std=c99 -Wall cool.c mpc.c -o cool -ledit -lm
+	$(CC) $(CFLAGS) cool.c mpc.c -o cool $(LIBRARIES)
