@@ -45,7 +45,7 @@ struct cval {
     cval *body;
 
     int count;
-    struct cval ** cell; 
+    struct cval ** cell;
     int error;
 };
 
@@ -312,6 +312,38 @@ cval_error(char *fmt, ...)
     va_end(va);
 
     return value;
+}
+
+cval *
+cval_readContent(char *fileName)
+{
+    FILE *fp = fopen(fileName, "r");
+    if (fp == NULL) {
+        // TODO: insert interest issuance here
+        return cval_error("Unable to open file %s", fileName);
+    } else {
+        cval *value = (cval *) malloc(sizeof(cval));
+        char fileBuffer[128]; // read in 128-byte blocks
+        size_t numBytesRead = 0;
+        for (;;) {
+            numBytesRead = fread(fileBuffer, 1, 128, fp);
+
+            // Copy fileBuffer bytes to the value list
+            int start = value->count;
+            value->count += numBytesRead;
+            realloc(value->cell, sizeof(cval *) * value->count);
+            for (int i = 0; i < numBytesRead; i++) {
+                int index = start + i;
+                value->cell[index] = cval_byte(fileBuffer[i]);
+            }
+
+            memset(fileBuffer, 0, 128); // reset
+            if (numBytesRead != 128) {
+                break;
+            }
+        }
+        return value;
+    }
 }
 
 void 
@@ -1082,6 +1114,16 @@ builtin_error(cenv *env, cval *x)
     return error;
 }
 
+cval *
+builtin_read(cenv *env, cval *x)
+{
+    CASSERT_NUM("read", x, 1);
+    CASSERT_TYPE("error", x, 0, CoolValue_String);
+    cval *byteList = cval_readContent(x->cell[0]->string);
+    cval_delete(x);
+    return byteList;
+}
+
 void
 cenv_addBuiltin(cenv *env, char *name, cbuiltin function)
 {
@@ -1098,6 +1140,9 @@ cenv_addBuiltinFunctions(cenv *env)
     cenv_addBuiltin(env, "load", builtin_load);
     cenv_addBuiltin(env, "print", builtin_print);
     cenv_addBuiltin(env, "error", builtin_error);
+
+    cenv_addBuiltin(env, "read", builtin_read);
+    // cenv_addBuiltin(env, "write", builtin_write);
 
     cenv_addBuiltin(env, "\\", builtin_lambda);
     cenv_addBuiltin(env, "def", builtin_def);
