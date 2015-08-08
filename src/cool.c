@@ -4,12 +4,15 @@
 
 #include "mpc.h"
 
+#define FILE_BLOCK_SIZE 128
+
 typedef enum {
     CoolValueError_DivideByZero,
     CoolValueError_BadOperator,
     CoolValueError_BadNumber
 } CoolValueError;
 
+// Primitive types
 typedef enum {
     CoolValue_LongInteger,
     CoolValue_Double,
@@ -322,23 +325,26 @@ cval_readContent(char *fileName)
         // TODO: insert interest issuance here
         return cval_error("Unable to open file %s", fileName);
     } else {
-        cval *value = (cval *) malloc(sizeof(cval));
-        char fileBuffer[128]; // read in 128-byte blocks
+        cval *value = cval_sexpr();
+        char fileBuffer[FILE_BLOCK_SIZE]; // read in FILE_BLOCK_SIZE-byte blocks
         size_t numBytesRead = 0;
         for (;;) {
-            numBytesRead = fread(fileBuffer, 1, 128, fp);
+            numBytesRead = fread(fileBuffer, 1, FILE_BLOCK_SIZE, fp);
 
             // Copy fileBuffer bytes to the value list
             int start = value->count;
+
             value->count += numBytesRead;
-            realloc(value->cell, sizeof(cval *) * value->count);
+            value->cell = realloc(value->cell, sizeof(cval *) * value->count);
+
             for (int i = 0; i < numBytesRead; i++) {
                 int index = start + i;
                 value->cell[index] = cval_byte(fileBuffer[i]);
             }
 
-            memset(fileBuffer, 0, 128); // reset
-            if (numBytesRead != 128) {
+            // Reset the file buffer (to zeros) and check to see if we're done
+            memset(fileBuffer, 0, FILE_BLOCK_SIZE); 
+            if (numBytesRead != FILE_BLOCK_SIZE) {
                 break;
             }
         }
