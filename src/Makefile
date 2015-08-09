@@ -2,7 +2,10 @@ CC=gcc
 CFLAGS=-std=c99 -Wall
 LIBRARIES=-ledit -lm
 
-all: cool
+all: cool cooli
 
 cool: cool.c
-	$(CC) $(CFLAGS) cool.c mpc.c -o cool $(LIBRARIES)
+	$(CC) $(CFLAGS) -c cool.c mpc.c 
+
+cooli: cooli.c cool
+	$(CC) $(CFLAGS) cooli.c cool.o mpc.o -o cooli $(LIBRARIES)

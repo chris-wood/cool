@@ -3,17 +3,23 @@
 #include <setjmp.h>
 #include <cmocka.h>
 
-/* A test case that does nothing and succeeds. */
-static void null_test_success(void **state) {
-    (void) state; /* unused */
+// For coverage
+#include "../cool.c"
+#include "../mpc.h"
+
+static void test_cval_longInteger(void **state) {
+	long input = 10;
+    cval *value = cval_longInteger(input);
+    assert_true(value->type == CoolValue_LongInteger);
+    assert_true(value->number == input);
+    assert_true(value->cell == NULL);
 }
 
 int 
 main(int argc, char **argv) 
 {
-
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(null_test_success),
+        cmocka_unit_test(test_cval_longInteger),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
