@@ -1,37 +1,11 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <editline/readline.h>
 
-#include "mpc.h"
+#include "cool.h"
 
 #define FILE_BLOCK_SIZE 128
 
-typedef enum {
-    CoolValueError_DivideByZero,
-    CoolValueError_BadOperator,
-    CoolValueError_BadNumber
-} CoolValueError;
-
-// Primitive types
-typedef enum {
-    CoolValue_LongInteger,
-    CoolValue_Double,
-    CoolValue_Byte,
-    CoolValue_String,
-    CoolValue_Symbol,
-    CoolValue_Sexpr,
-    CoolValue_Qexpr,
-    CoolValue_Function,
-    CoolValue_Error
-} CoolValue;
-
-struct cenv;
-struct cval;
-typedef struct cenv cenv;
-typedef struct cval cval;
-
 // builtin function
-typedef cval *(*cbuiltin)(cenv *, cval *);
+typedef Value *(*cbuiltin)(Environment *, Value *);
 
 struct cval {
     int type;
@@ -43,9 +17,9 @@ struct cval {
     char *string;
 
     cbuiltin builtin;
-    cenv *env;
-    cval *formals;
-    cval *body;
+    Environment *env;
+    Value *formals;
+    Value *body;
 
     int count;
     struct cval ** cell;
@@ -53,43 +27,33 @@ struct cval {
 };
 
 struct cenv {
-    cenv *parent;
+    Environment *parent;
     int count;
     char **symbols;
     struct cval **values;
 }; 
 
 // Forward declaration prototypes
-void cval_print(cval *value);
-cval *cval_eval(cenv *env, cval *value);
-void cval_delete(cval *value);
-cval *cval_error(char *fmt, ...);
-cval *cval_copy(cval *in);
-char *cval_typeString(int type);
-cval *builtin_eval(cenv *env, cval *x);
-cval *builtin_list(cenv *env, cval *x);
-
-// Parsing grammars
-mpc_parser_t* Number;
-mpc_parser_t* Symbol;
-mpc_parser_t* String;
-mpc_parser_t* Comment;
-mpc_parser_t* Sexpr;
-mpc_parser_t* Qexpr;
-mpc_parser_t* Expr;
-mpc_parser_t* Cool;
+void Value_print(Value *value);
+Value *Value_eval(Environment *env, Value *value);
+void Value_delete(Value *value);
+Value *Value_error(char *fmt, ...);
+Value *Value_copy(Value *in);
+char *Value_typeString(int type);
+Value *builtin_eval(Environment *env, Value *x);
+Value *builtin_list(Environment *env, Value *x);
 
 #define CASSERT(args, cond, fmt, ...) \
     if (!(cond)) { \
-        cval *error = cval_error(fmt, ##__VA_ARGS__); \
-        cval_delete(args); \
+        Value *error = Value_error(fmt, ##__VA_ARGS__); \
+        Value_delete(args); \
         return error; \
     }
 
 #define CASSERT_TYPE(func, args, index, expect) \
     CASSERT(args, (args->cell[index]->type & expect) > 1, \
         "Function '%s' passed incorrect type for argument %i. Got %s, Expected %s.", \
-        func, index, cval_typeString(args->cell[index]->type), cval_typeString(expect));
+        func, index, Value_typeString(args->cell[index]->type), Value_typeString(expect));
 
 #define CASSERT_NUM(func, args, num) \
     CASSERT(args, args->count == num, \
@@ -100,181 +64,187 @@ mpc_parser_t* Cool;
     CASSERT(args, args->cell[index]->count != 0, \
         "Function '%s' passed {} for argument %i.", func, index);
 
-cenv *
-cenv_new() 
+Environment *
+Environment_new() 
 {
-    cenv *env = (cenv *) malloc(sizeof(cenv));
+    Environment *env = (Environment *) malloc(sizeof(Environment));
     env->parent = NULL;
     env->count = 0;
     env->symbols = (char **) malloc(sizeof(char *));
-    env->values = (cval **) malloc(sizeof(cval *));
+    env->values = (Value **) malloc(sizeof(Value *));
     return env;
 }
 
 void
-cenv_delete(cenv *env) 
+Environment_delete(Environment *env) 
 {
     for (int i = 0; i < env->count; i++) {
         free(env->symbols[i]);
-        cval_delete(env->values[i]);
+        Value_delete(env->values[i]);
     }
     free(env->symbols);
     free(env->values);
     free(env);
 }
 
-cval *
-cenv_get(cenv *env, cval *val) 
+Value *
+Environment_get(Environment *env, Value *val) 
 {
     for (int i = 0; i < env->count; i++) {
         if (strcmp(env->symbols[i], val->symbolString) == 0) {
-            return cval_copy(env->values[i]);
+            return Value_copy(env->values[i]);
         }
     }
 
     if (env->parent) {
-        return cenv_get(env->parent, val);
+        return Environment_get(env->parent, val);
     } else {
-        return cval_error("Undefined symbol: %s", val->symbolString);
+        return Value_error("Undefined symbol: %s", val->symbolString);
     }
 }
 
 void 
-cenv_put(cenv *env, cval* key, cval *val) 
+Environment_put(Environment *env, Value* key, Value *val) 
 {
     // Replace the value if it exists
     for (int i = 0; i < env->count; i++) {
         if (strcmp(env->symbols[i], key->symbolString) == 0) {
-            cval_delete(env->values[i]);
-            env->values[i] = cval_copy(val);
+            Value_delete(env->values[i]);
+            env->values[i] = Value_copy(val);
             return;
         }
     }
 
     env->count++;
-    env->values = realloc(env->values, sizeof(cval *) * env->count);
+    env->values = realloc(env->values, sizeof(Value *) * env->count);
     env->symbols = realloc(env->symbols, sizeof(char *) * env->count);
 
-    env->values[env->count - 1] = cval_copy(val);
+    env->values[env->count - 1] = Value_copy(val);
     env->symbols[env->count - 1] = malloc(strlen(key->symbolString) + 1);
     strcpy(env->symbols[env->count - 1], key->symbolString);
 }
 
-cenv *
-cenv_copy(cenv *env)
+Environment *
+Environment_copy(Environment *env)
 {
-    cenv *copy = (cenv *) malloc(sizeof(cenv));
+    Environment *copy = (Environment *) malloc(sizeof(Environment));
     copy->parent = env->parent;
     copy->count = env->count;
     copy->symbols = (char **) malloc(sizeof(char *) * env->count);
-    copy->values = (cval **) malloc(sizeof(cval *) * env->count);
+    copy->values = (Value **) malloc(sizeof(Value *) * env->count);
     for (int i = 0; i < env->count; i++) {
         copy->symbols[i] = (char *) malloc(strlen(env->symbols[i]) + 1);
         strcpy(copy->symbols[i], env->symbols[i]);
-        copy->values[i] = cval_copy(env->values[i]);
+        copy->values[i] = Value_copy(env->values[i]);
     }
     return copy;
 }
 
 void
-cenv_def(cenv *env, cval *key, cval *value)
+Environment_def(Environment *env, Value *key, Value *value)
 {
     while (env->parent != NULL) {
         env = env->parent;
     }
-    cenv_put(env, key, value);
+    Environment_put(env, key, value);
 }
 
-cval *
-cval_longInteger(long x) 
+CoolValue 
+Value_getType(Value *value)
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    return (CoolValue) value->type;
+}
+
+Value *
+Value_longInteger(long x) 
+{
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_LongInteger;
     value->number = x;
     return value;
 }
 
-cval *
-cval_double(double x)
+Value *
+Value_double(double x)
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Double;
     value->fpnumber = x;
     return value;
 }
 
-cval *
-cval_byte(char x)
+Value *
+Value_byte(char x)
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Byte;
     value->number = (long) x;
     return value;
 }
 
-cval *
-cval_string(char *str)
+Value *
+Value_string(char *str)
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_String;
     value->string = (char *) malloc((strlen(str) + 1) * sizeof(char));
     strcpy(value->string, str);
     return value;
 }
 
-cval *
-cval_symbol(char *symbol) 
+Value *
+Value_symbol(char *symbol) 
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Symbol;
     value->symbolString = (char *) malloc((strlen(symbol) + 1) * sizeof(char));
     strcpy(value->symbolString, symbol);
     return value;
 }
 
-cval * 
-cval_sexpr() 
+Value * 
+Value_sexpr() 
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Sexpr;
     value->count = 0;
     value->cell = NULL;
     return value;
 }
 
-cval * 
-cval_qexpr() 
+Value * 
+Value_qexpr() 
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Qexpr;
     value->count = 0;
     value->cell = NULL;
     return value;
 }
 
-cval *
-cval_builtin(cbuiltin function) 
+Value *
+Value_builtin(cbuiltin function) 
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Function;
     value->builtin = function;
     return value;
 }
 
-cval *
-cval_lambda(cval *formals, cval *body)
+Value *
+Value_lambda(Value *formals, Value *body)
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Function;
     value->builtin = NULL;
-    value->env = cenv_new();
+    value->env = Environment_new();
     value->formals = formals;
     value->body = body;
     return value;
 }
 
 char *
-cval_typeString(int type)
+Value_typeString(int type)
 {
     switch (type) {
         case CoolValue_Error: 
@@ -299,10 +269,10 @@ cval_typeString(int type)
     }
 }
 
-cval * 
-cval_error(char *fmt, ...) 
+Value * 
+Value_error(char *fmt, ...) 
 {
-    cval *value = (cval *) malloc(sizeof(cval));
+    Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Error;
 
     va_list va;
@@ -317,15 +287,15 @@ cval_error(char *fmt, ...)
     return value;
 }
 
-cval *
-cval_readContent(char *fileName)
+Value *
+Value_readContent(char *fileName)
 {
     FILE *fp = fopen(fileName, "r");
     if (fp == NULL) {
         // TODO: insert interest issuance here
-        return cval_error("Unable to open file %s", fileName);
+        return Value_error("Unable to open file %s", fileName);
     } else {
-        cval *value = cval_sexpr();
+        Value *value = Value_sexpr();
         char fileBuffer[FILE_BLOCK_SIZE]; // read in FILE_BLOCK_SIZE-byte blocks
         size_t numBytesRead = 0;
         for (;;) {
@@ -335,11 +305,11 @@ cval_readContent(char *fileName)
             int start = value->count;
 
             value->count += numBytesRead;
-            value->cell = realloc(value->cell, sizeof(cval *) * value->count);
+            value->cell = realloc(value->cell, sizeof(Value *) * value->count);
 
             for (int i = 0; i < numBytesRead; i++) {
                 int index = start + i;
-                value->cell[index] = cval_byte(fileBuffer[i]);
+                value->cell[index] = Value_byte(fileBuffer[i]);
             }
 
             // Reset the file buffer (to zeros) and check to see if we're done
@@ -353,7 +323,7 @@ cval_readContent(char *fileName)
 }
 
 void 
-cval_delete(cval *value)
+Value_delete(Value *value)
 {
     switch (value->type) {
         case CoolValue_LongInteger:
@@ -372,15 +342,15 @@ cval_delete(cval *value)
         case CoolValue_Sexpr:
         case CoolValue_Qexpr:
             for (int i = 0; i < value->count; i++) {
-                cval_delete(value->cell[i]);
+                Value_delete(value->cell[i]);
             }
             free(value->cell);
             break;
         case CoolValue_Function:
             if (value->builtin == NULL) {
-                cenv_delete(value->env);
-                cval_delete(value->formals);
-                cval_delete(value->body);
+                Environment_delete(value->env);
+                Value_delete(value->formals);
+                Value_delete(value->body);
             }
             break;
     }
@@ -389,11 +359,11 @@ cval_delete(cval *value)
 }
 
 void
-cval_printExpr(cval *value, char open, char close)
+Value_printExpr(Value *value, char open, char close)
 {
     putchar(open);
     for (int i = 0; i < value->count; i++) {
-        cval_print(value->cell[i]);
+        Value_print(value->cell[i]);
         if (i != (value->count - 1)) {
             putchar(' ');
         }
@@ -402,7 +372,7 @@ cval_printExpr(cval *value, char open, char close)
 }
 
 void 
-cval_print(cval *value) 
+Value_print(Value *value) 
 {
     switch (value->type) {
         case CoolValue_LongInteger: 
@@ -424,19 +394,19 @@ cval_print(cval *value)
             printf("%s", value->symbolString);
             break;
         case CoolValue_Sexpr:
-            cval_printExpr(value, '(', ')');
+            Value_printExpr(value, '(', ')');
             break;
         case CoolValue_Qexpr:
-            cval_printExpr(value, '{', '}');
+            Value_printExpr(value, '{', '}');
             break;
         case CoolValue_Function:
             if (value->builtin != NULL) {
                 printf("<builtin>");
             } else {
                 printf("(\\ ");
-                cval_print(value->formals);
+                Value_print(value->formals);
                 printf(" ");
-                cval_print(value->body);
+                Value_print(value->body);
                 printf(" ");
             }
             break;
@@ -444,16 +414,16 @@ cval_print(cval *value)
 }
 
 void 
-cval_println(cval *value) 
+Value_println(Value *value) 
 {
-    cval_print(value);
+    Value_print(value);
     putchar('\n');
 }
 
-cval *
-cval_copy(cval *in)
+Value *
+Value_copy(Value *in)
 {
-    cval *copy = (cval *) malloc(sizeof(cval));
+    Value *copy = (Value *) malloc(sizeof(Value));
     copy->type = in->type;
 
     switch (in->type) {
@@ -462,9 +432,9 @@ cval_copy(cval *in)
                 copy->builtin = in->builtin;
             } else {
                 copy->builtin = NULL;
-                copy->env = cenv_copy(in->env);
-                copy->formals = cval_copy(in->formals);
-                copy->body = cval_copy(in->body);
+                copy->env = Environment_copy(in->env);
+                copy->formals = Value_copy(in->formals);
+                copy->body = Value_copy(in->body);
             }
             break;
         case CoolValue_LongInteger:
@@ -489,9 +459,9 @@ cval_copy(cval *in)
         case CoolValue_Sexpr:
         case CoolValue_Qexpr:
             copy->count = in->count;
-            copy->cell = (cval **) malloc(sizeof(cval *) * copy->count);
+            copy->cell = (Value **) malloc(sizeof(Value *) * copy->count);
             for (int i = 0; i < copy->count; i++) {
-                copy->cell[i] = cval_copy(in->cell[i]);
+                copy->cell[i] = Value_copy(in->cell[i]);
             }
             break;
     }
@@ -499,75 +469,75 @@ cval_copy(cval *in)
     return copy;
 }
 
-cval *
-cval_add(cval *value, cval *x) 
+Value *
+Value_add(Value *value, Value *x) 
 {
     value->count++;
-    value->cell = realloc(value->cell, sizeof(cval *) * value->count);
+    value->cell = realloc(value->cell, sizeof(Value *) * value->count);
     value->cell[value->count - 1] = x;
     return value;
 }
 
-cval * 
-cval_read_num(mpc_ast_t* t) 
+Value * 
+Value_read_num(mpc_ast_t* t) 
 {
     errno = 0;
     long x = strtol(t->contents, NULL, 10);
-    return errno != ERANGE ? cval_longInteger(x) : cval_error("invalid number");
+    return errno != ERANGE ? Value_longInteger(x) : Value_error("invalid number");
 }
 
-cval *
-cval_read_fpnumber(mpc_ast_t* t)
+Value *
+Value_read_fpnumber(mpc_ast_t* t)
 {
     errno = 0;
     double x = atof(t->contents);
-    return cval_double(x);
+    return Value_double(x);
 }
 
-cval *
-cval_read_number(mpc_ast_t* t)
+Value *
+Value_read_number(mpc_ast_t* t)
 {
     if (strstr(t->contents, ".")) {
-        return cval_read_fpnumber(t);
+        return Value_read_fpnumber(t);
     } else {
-        return cval_read_num(t);
+        return Value_read_num(t);
     }
 }
 
-cval *
-cval_readString(mpc_ast_t *t)
+Value *
+Value_readString(mpc_ast_t *t)
 {
     t->contents[strlen(t->contents) - 1] = '\0';
     char *unescaped = (char *) malloc(strlen(t->contents + 1) + 1); // quote at start and end
     strcpy(unescaped, t->contents + 1);
     unescaped = mpcf_unescape(unescaped); // drop quotes
-    cval *string = cval_string(unescaped);
+    Value *string = Value_string(unescaped);
     free(unescaped);
     return string;
 }
 
-cval *
-cval_read(mpc_ast_t *t) 
+Value *
+Value_read(mpc_ast_t *t) 
 {
     if (strstr(t->tag, "number")) {
-        return cval_read_number(t);
+        return Value_read_number(t);
     }
     if (strstr(t->tag, "symbol")) {
-        return cval_symbol(t->contents);
+        return Value_symbol(t->contents);
     }
     if (strstr(t->tag, "string")) {
-        return cval_readString(t);
+        return Value_readString(t);
     }
 
-    cval *x = NULL;
+    Value *x = NULL;
     if (strcmp(t->tag, ">") == 0) {
-        x = cval_sexpr();
+        x = Value_sexpr();
     }
     if (strstr(t->tag, "sexpr")) {
-        x = cval_sexpr();
+        x = Value_sexpr();
     }
     if (strstr(t->tag, "qexpr")) {
-        x = cval_qexpr();
+        x = Value_qexpr();
     }
 
     for (int i = 0; i < t->children_num; i++) {
@@ -589,42 +559,42 @@ cval_read(mpc_ast_t *t)
         if (strcmp(t->children[i]->tag, "comment") == 0) {
             continue;
         }
-        x = cval_add(x, cval_read(t->children[i]));
+        x = Value_add(x, Value_read(t->children[i]));
     }
 
     return x;
 }
 
-cval *
-cval_pop(cval *value, int i)
+Value *
+Value_pop(Value *value, int i)
 {
-    cval *x = value->cell[i];
-    memmove(&value->cell[i], &value->cell[i + 1], sizeof(cval *) * (value->count - 1));
+    Value *x = value->cell[i];
+    memmove(&value->cell[i], &value->cell[i + 1], sizeof(Value *) * (value->count - 1));
     value->count--;
-    value->cell = realloc(value->cell, sizeof(cval *) * value->count);
+    value->cell = realloc(value->cell, sizeof(Value *) * value->count);
     return x;
 }
 
-cval *
-cval_take(cval *value, int i) 
+Value *
+Value_take(Value *value, int i) 
 {
-    cval *x = cval_pop(value, i);
-    cval_delete(value);
+    Value *x = Value_pop(value, i);
+    Value_delete(value);
     return x;
 }
 
-cval *
-cval_join(cval *x, cval *y)
+Value *
+Value_join(Value *x, Value *y)
 {
     while (y->count > 0) {
-        x = cval_add(x, cval_pop(y, 0));
+        x = Value_add(x, Value_pop(y, 0));
     }
-    cval_delete(y);
+    Value_delete(y);
     return x;
 }
 
-cval *
-cval_call(cenv *env, cval *function, cval *x)
+Value *
+Value_call(Environment *env, Value *function, Value *x)
 {
     if (function->builtin) {
         return function->builtin(env, x);
@@ -635,61 +605,61 @@ cval_call(cenv *env, cval *function, cval *x)
 
     while (x->count > 0) {
         if (function->formals->count == 0) {
-            cval_delete(x);
-            return cval_error("Function was given too many arguments. Got %d, expected %d", given, total);
+            Value_delete(x);
+            return Value_error("Function was given too many arguments. Got %d, expected %d", given, total);
         }
 
-        cval *symbol = cval_pop(function->formals, 0);
+        Value *symbol = Value_pop(function->formals, 0);
 
         if (strcmp(symbol->symbolString, "&") == 0) {
             if (function->formals->count != 1) {
-                cval_delete(x);
-                return cval_error("Function format invalid. ", "Symbol '&' not followed by single symbol.");
+                Value_delete(x);
+                return Value_error("Function format invalid. ", "Symbol '&' not followed by single symbol.");
             }
 
-            cval* nsym = cval_pop(function->formals, 0);
-            cenv_put(function->env, nsym, builtin_list(env, x));
-            cval_delete(symbol); 
-            cval_delete(nsym);
+            Value* nsym = Value_pop(function->formals, 0);
+            Environment_put(function->env, nsym, builtin_list(env, x));
+            Value_delete(symbol); 
+            Value_delete(nsym);
             break;
         }
 
-        cval *value = cval_pop(x, 0);
+        Value *value = Value_pop(x, 0);
         
-        cenv_put(function->env, symbol, value);
+        Environment_put(function->env, symbol, value);
 
-        cval_delete(symbol);
-        cval_delete(value);
+        Value_delete(symbol);
+        Value_delete(value);
     }
 
-    cval_delete(x);
+    Value_delete(x);
 
     if (function->formals->count > 0 && strcmp(function->formals->cell[0]->symbolString, "&") == 0) {
         if (function->formals->count != 2) {
-            return cval_error("Function format invalid. ", "Symbol '&' not followed by single symbol.");
+            return Value_error("Function format invalid. ", "Symbol '&' not followed by single symbol.");
         }
 
-        cval_delete(cval_pop(function->formals, 0));
+        Value_delete(Value_pop(function->formals, 0));
 
-        cval* sym = cval_pop(function->formals, 0);
-        cval* val = cval_qexpr();
+        Value* sym = Value_pop(function->formals, 0);
+        Value* val = Value_qexpr();
 
-        cenv_put(function->env, sym, val);
-        cval_delete(sym); 
-        cval_delete(val);
+        Environment_put(function->env, sym, val);
+        Value_delete(sym); 
+        Value_delete(val);
     }
 
     if (function->formals->count == 0) {
         function->env->parent = env;
-        cval *newFunctionBody = cval_add(cval_sexpr(), cval_copy(function->body));
+        Value *newFunctionBody = Value_add(Value_sexpr(), Value_copy(function->body));
         return builtin_eval(function->env, newFunctionBody);
     } else {
-        return cval_copy(function);
+        return Value_copy(function);
     }
 }
 
-cval *
-builtin_lambda(cenv *env, cval *x) 
+Value *
+builtin_lambda(Environment *env, Value *x) 
 {
     CASSERT_NUM("\\", x, 2);
     CASSERT_TYPE("\\", x, 0, CoolValue_Qexpr);
@@ -697,132 +667,132 @@ builtin_lambda(cenv *env, cval *x)
 
     for (int i = 0; i < x->cell[0]->count; i++) {
         CASSERT(x, (x->cell[0]->cell[i]->type == CoolValue_Symbol), "Cannot define non-symbol. Got %s, Expected %s", 
-            cval_typeString(x->cell[0]->cell[i]->type), cval_typeString(CoolValue_Symbol));
+            Value_typeString(x->cell[0]->cell[i]->type), Value_typeString(CoolValue_Symbol));
     }
 
-    cval *formals = cval_pop(x, 0);
-    cval *body = cval_pop(x, 0);
-    cval_delete(x);
+    Value *formals = Value_pop(x, 0);
+    Value *body = Value_pop(x, 0);
+    Value_delete(x);
 
-    cval *lambda = cval_lambda(formals, body);
+    Value *lambda = Value_lambda(formals, body);
 
     return lambda;
 }
 
-cval *
-builtin_var(cenv *env, cval *val, char *function) 
+Value *
+builtin_var(Environment *env, Value *val, char *function) 
 {
     CASSERT(val, val->count > 0, "Function 'def' expected non-empty variable declaration, got %d", val->count);
-    CASSERT(val, val->cell[0]->type == CoolValue_Qexpr, "Function 'def' passed incorrect type, got %s", cval_typeString(val->cell[0]->type));
+    CASSERT(val, val->cell[0]->type == CoolValue_Qexpr, "Function 'def' passed incorrect type, got %s", Value_typeString(val->cell[0]->type));
 
-    cval *symbols = val->cell[0];
+    Value *symbols = val->cell[0];
 
-    // cval_println(val);
-    // cval_println(symbols);
+    // Value_println(val);
+    // Value_println(symbols);
 
     for (int i = 0; i < symbols->count; i++) {
-        CASSERT(val, symbols->cell[i]->type == CoolValue_Symbol, "Function 'def' cannot define a non-symbol, got %s", cval_typeString(symbols->cell[i]->type));
+        CASSERT(val, symbols->cell[i]->type == CoolValue_Symbol, "Function 'def' cannot define a non-symbol, got %s", Value_typeString(symbols->cell[i]->type));
     }
 
     CASSERT(val, symbols->count == val->count - 1, "Function 'def' cannot define incorrect number of values to symbols, got %d", symbols->count);
 
     for (int i = 0; i < symbols->count; i++) {
         if (strcmp(function, "def") == 0) {
-            cenv_def(env, symbols->cell[i], val->cell[i + 1]);
+            Environment_def(env, symbols->cell[i], val->cell[i + 1]);
         } 
 
         if (strcmp(function, "=") == 0) {
-            cenv_put(env, symbols->cell[i], val->cell[i + 1]);
+            Environment_put(env, symbols->cell[i], val->cell[i + 1]);
         }
     }
 
-    cval_delete(val);
+    Value_delete(val);
 
-    return cval_sexpr();
+    return Value_sexpr();
 }
 
-cval *
-builtin_def(cenv *env, cval *val)
+Value *
+builtin_def(Environment *env, Value *val)
 {
     return builtin_var(env, val, "def");
 }
 
-cval *
-builtin_put(cenv *env, cval *val)
+Value *
+builtin_put(Environment *env, Value *val)
 {
     return builtin_var(env, val, "put");
 }
 
-cval *
-builtin_head(cenv *env, cval *x)
+Value *
+builtin_head(Environment *env, Value *x)
 {
     CASSERT(x, x->count == 1, "Function 'head' passed to many arguments, got %d", x->count);
-    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'head' passed incorrect type, got %s", cval_typeString(x->cell[0]->type));
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'head' passed incorrect type, got %s", Value_typeString(x->cell[0]->type));
     CASSERT(x, x->cell[0]->count > 0, "Function 'head' passed {}, got %d", x->cell[0]->count);
 
-    cval *head = cval_take(x, 0);
+    Value *head = Value_take(x, 0);
     while (head->count > 1) {
-        cval_delete(cval_pop(head, 1));
+        Value_delete(Value_pop(head, 1));
     }
 
     return head;
 }
 
-cval *
-builtin_tail(cenv *env, cval *x)
+Value *
+builtin_tail(Environment *env, Value *x)
 {
     CASSERT(x, x->count == 1, "Function 'head' passed to many arguments, got %d", x->count);
-    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'tail' passed incorrect type, got %s", cval_typeString(x->cell[0]->type));
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'tail' passed incorrect type, got %s", Value_typeString(x->cell[0]->type));
     CASSERT(x, x->cell[0]->count > 0, "Function 'head' passed {}, got %d", x->cell[0]->count);
 
-    cval *head = cval_take(x, 0);
-    cval_delete(cval_pop(head, 0));
-    cval *tail = head;
+    Value *head = Value_take(x, 0);
+    Value_delete(Value_pop(head, 0));
+    Value *tail = head;
 
     return tail;
 }
 
-cval *
-builtin_list(cenv *env, cval *x)
+Value *
+builtin_list(Environment *env, Value *x)
 {
     x->type = CoolValue_Qexpr;
     return x;
 }
 
-cval *
-builtin_eval(cenv *env, cval *x)
+Value *
+builtin_eval(Environment *env, Value *x)
 {
     CASSERT(x, x->count == 1, "Function 'eval' passed too many arguments, got %d", x->count);
-    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'eval' passed incorrect type, got %s", cval_typeString(x->cell[0]->type));
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'eval' passed incorrect type, got %s", Value_typeString(x->cell[0]->type));
 
     // pop the head and evaluate it
-    cval *head = cval_take(x, 0);
+    Value *head = Value_take(x, 0);
     head->type = CoolValue_Sexpr;
-    cval *evalResult = cval_eval(env, head);
+    Value *evalResult = Value_eval(env, head);
 
     return evalResult;
 }
 
-cval *
-builtin_join(cenv *env, cval *x)
+Value *
+builtin_join(Environment *env, Value *x)
 {
     for (int i = 0; i < x->count; i++) {
         CASSERT(x, x->cell[i]->type == CoolValue_Qexpr, "Function 'join' passed incorrect type, got %s", x->cell[i]->type);
     }
 
-    cval *y = cval_pop(x, 0);
+    Value *y = Value_pop(x, 0);
     while (x->count > 0) {
-        cval *z = cval_pop(x, 0);
-        y = cval_join(y, z);
+        Value *z = Value_pop(x, 0);
+        y = Value_join(y, z);
     }
 
-    cval_delete(x);
+    Value_delete(x);
 
     return y;
 }
 
 int 
-cval_equal(cval *x, cval *y)
+Value_equal(Value *x, Value *y)
 {
     if (x->type != y->type) {
         return 0;
@@ -844,7 +814,7 @@ cval_equal(cval *x, cval *y)
             if (x->builtin || y->builtin) {
                 return x->builtin == y->builtin;
             } else {
-                return cval_equal(x->formals, y->formals) && cval_equal(x->body, y->body);
+                return Value_equal(x->formals, y->formals) && Value_equal(x->body, y->body);
             }
         case CoolValue_Sexpr:
         case CoolValue_Qexpr:
@@ -852,7 +822,7 @@ cval_equal(cval *x, cval *y)
                 return 0;
             }
             for (int i = 0; i < x->count; i++) {
-                int valuesEqual = cval_equal(x->cell[i], y->cell[i]);
+                int valuesEqual = Value_equal(x->cell[i], y->cell[i]);
                 if (valuesEqual == 0) { // values not equal
                     return 0;
                 }
@@ -863,8 +833,8 @@ cval_equal(cval *x, cval *y)
     return 0; // false by default
 }
 
-cval *
-builtin_double_order(cenv *env, cval *x, char *operator) 
+Value *
+builtin_double_order(Environment *env, Value *x, char *operator) 
 {
     int ret = 0;
     if (strcmp(operator, ">") == 0) {
@@ -876,16 +846,16 @@ builtin_double_order(cenv *env, cval *x, char *operator)
     } else if (strcmp(operator, "<=") == 0) {
         ret = (x->cell[0]->fpnumber <= x->cell[1]->fpnumber);
     } else {
-        cval_delete(x);
-        return cval_error("Error: unexpected operator in 'builtin_order': %s", operator);
+        Value_delete(x);
+        return Value_error("Error: unexpected operator in 'builtin_order': %s", operator);
     }
 
-    cval_delete(x);
-    return cval_longInteger(ret);
+    Value_delete(x);
+    return Value_longInteger(ret);
 }
 
-cval *
-builtin_long_order(cenv *env, cval *x, char *operator) 
+Value *
+builtin_long_order(Environment *env, Value *x, char *operator) 
 {
     int ret = 0;
     if (strcmp(operator, ">") == 0) {
@@ -897,16 +867,16 @@ builtin_long_order(cenv *env, cval *x, char *operator)
     } else if (strcmp(operator, "<=") == 0) {
         ret = (x->cell[0]->number <= x->cell[1]->number);
     } else {
-        cval_delete(x);
-        return cval_error("Error: unexpected operator in 'builtin_order': %s", operator);
+        Value_delete(x);
+        return Value_error("Error: unexpected operator in 'builtin_order': %s", operator);
     }
 
-    cval_delete(x);
-    return cval_longInteger(ret);
+    Value_delete(x);
+    return Value_longInteger(ret);
 }
 
-cval *
-builtin_order(cenv *env, cval *x, char *operator) 
+Value *
+builtin_order(Environment *env, Value *x, char *operator) 
 {
     CASSERT_NUM(operator, x, 2);
     if (x->cell[0]->type == CoolValue_LongInteger || x->cell[0]->type == CoolValue_Byte) {
@@ -920,97 +890,97 @@ builtin_order(cenv *env, cval *x, char *operator)
     }
 }
 
-cval *
-builtin_gt(cenv *env, cval *x)
+Value *
+builtin_gt(Environment *env, Value *x)
 {
     return builtin_order(env, x, ">");
 }
 
-cval *
-builtin_lt(cenv *env, cval *x)
+Value *
+builtin_lt(Environment *env, Value *x)
 {
     return builtin_order(env, x, "<");
 }
 
-cval *
-builtin_gte(cenv *env, cval *x)
+Value *
+builtin_gte(Environment *env, Value *x)
 {
     return builtin_order(env, x, ">=");
 }
 
-cval *
-builtin_lte(cenv *env, cval *x)
+Value *
+builtin_lte(Environment *env, Value *x)
 {
     return builtin_order(env, x, "<=");
 }
 
-cval *
-builtin_compare(cenv *env, cval *x, char *operator) {
+Value *
+builtin_compare(Environment *env, Value *x, char *operator) {
     CASSERT_NUM(operator, x, 2);
     int ret = 0;
 
     if (strcmp(operator, "==") == 0) {
-        ret = cval_equal(x->cell[0], x->cell[1]);
+        ret = Value_equal(x->cell[0], x->cell[1]);
     } else if (strcmp(operator, "!=") == 0) {
-        ret = !cval_equal(x->cell[0], x->cell[1]);
+        ret = !Value_equal(x->cell[0], x->cell[1]);
     }
 
-    cval_delete(x);
-    return cval_longInteger(ret);
+    Value_delete(x);
+    return Value_longInteger(ret);
 }
 
-cval *
-builtin_equal(cenv *env, cval *x)
+Value *
+builtin_equal(Environment *env, Value *x)
 {
     return builtin_compare(env, x, "==");
 }
 
-cval *
-builtin_notequal(cenv *env, cval *x)
+Value *
+builtin_notequal(Environment *env, Value *x)
 {
     return builtin_compare(env, x, "!=");
 }
 
-cval *
-builtin_if(cenv *env, cval *x)
+Value *
+builtin_if(Environment *env, Value *x)
 {
     CASSERT_NUM("if", x, 3);
     CASSERT_TYPE("if", x, 0, CoolValue_LongInteger);
     CASSERT_TYPE("if", x, 1, CoolValue_Qexpr);
     CASSERT_TYPE("if", x, 2, CoolValue_Qexpr);
 
-    cval *y;
+    Value *y;
     x->cell[1]->type = CoolValue_Sexpr;
     x->cell[2]->type = CoolValue_Sexpr;
 
     if (x->cell[0]->number > 0) {
-        y = cval_eval(env, cval_pop(x, 1));
+        y = Value_eval(env, Value_pop(x, 1));
     } else {
-        y = cval_eval(env, cval_pop(x, 2));
+        y = Value_eval(env, Value_pop(x, 2));
     }
 
-    cval_delete(x);
+    Value_delete(x);
     return y;
 }
 
-cval *
-builtin_op(cenv *env, cval *expr, char* op) 
+Value *
+builtin_op(Environment *env, Value *expr, char* op) 
 {
     for (int i = 0; i < expr->count; i++) {
         if (expr->cell[i]->type != CoolValue_LongInteger && expr->cell[i]->type != CoolValue_Double) {
-            cval_delete(expr);
-            return cval_error("Cannot operate on a non-number, got type %s", cval_typeString(expr->cell[i]->type));
+            Value_delete(expr);
+            return Value_error("Cannot operate on a non-number, got type %s", Value_typeString(expr->cell[i]->type));
         }
     }
 
-    cval *x = cval_pop(expr, 0);
+    Value *x = Value_pop(expr, 0);
 
     if ((strcmp(op, "-") == 0) && expr->count == 0) {
         x->number = -x->number;
     }
 
     while (expr->count > 0) {
-        cval *y = cval_pop(expr, 0);
+        Value *y = Value_pop(expr, 0);
         if (strcmp(op, "+") == 0) { 
             x->number += y->number;
         } 
@@ -1022,46 +992,46 @@ builtin_op(cenv *env, cval *expr, char* op)
         }
         if (strcmp(op, "/") == 0) { 
             if (y->number == 0) {
-                cval_delete(x);
-                cval_delete(y);
-                x = cval_error("Division by zero.");
+                Value_delete(x);
+                Value_delete(y);
+                x = Value_error("Division by zero.");
                 break;
             }
             x->number /= y->number;
         }
-        cval_delete(y);
+        Value_delete(y);
     }
 
-    cval_delete(expr);
+    Value_delete(expr);
     return x;
 }
 
-cval *
-builtin_add(cenv *env, cval *val)
+Value *
+builtin_add(Environment *env, Value *val)
 {
     return builtin_op(env, val, "+");
 }
 
-cval *
-builtin_sub(cenv *env, cval *val)
+Value *
+builtin_sub(Environment *env, Value *val)
 {
     return builtin_op(env, val, "-");
 }
 
-cval *
-builtin_mul(cenv *env, cval *val)
+Value *
+builtin_mul(Environment *env, Value *val)
 {
     return builtin_op(env, val, "*");
 }
 
-cval *
-builtin_div(cenv *env, cval *val)
+Value *
+builtin_div(Environment *env, Value *val)
 {
     return builtin_op(env, val, "/");
 }
 
-cval *
-builtin_load(cenv *env, cval *x)
+Value *
+builtin_load(Environment *env, Value *x)
 {
     CASSERT_NUM("load", x, 1);
     CASSERT_TYPE("load", x, 0, CoolValue_String);
@@ -1069,124 +1039,124 @@ builtin_load(cenv *env, cval *x)
     mpc_result_t result;
     if (mpc_parse_contents(x->cell[0]->string, Cool, &result)) {
         
-        cval *expr = cval_read(result.output);
+        Value *expr = Value_read(result.output);
         mpc_ast_delete(result.output);
 
         while (expr->count > 0) {
-            cval *top = cval_pop(expr, 0);
-            cval *y = cval_eval(env, top);
+            Value *top = Value_pop(expr, 0);
+            Value *y = Value_eval(env, top);
             if (y->type == CoolValue_Error) {
-                cval_println(y);
+                Value_println(y);
             } 
-            cval_delete(y);
+            Value_delete(y);
         }
 
-        cval_delete(expr);
-        cval_delete(x);
+        Value_delete(expr);
+        Value_delete(x);
 
-        return cval_sexpr();
+        return Value_sexpr();
     } else { // parsing error
         char *errorMessage = mpc_err_string(result.error);
         mpc_err_delete(result.error);
 
-        cval *error = cval_error("Could not load library %s", errorMessage);
+        Value *error = Value_error("Could not load library %s", errorMessage);
         free(errorMessage);
-        cval_delete(x);
+        Value_delete(x);
 
         return error;
     }
 }
 
-cval * 
-builtin_print(cenv *env, cval *x)
+Value * 
+builtin_print(Environment *env, Value *x)
 {
     for (int i = 0; i < x->count; i++) {
-        cval_print(x->cell[i]);
+        Value_print(x->cell[i]);
         putchar(' ');
     }
     putchar('\n');
-    cval_delete(x);
+    Value_delete(x);
 
-    return cval_sexpr();
+    return Value_sexpr();
 }
 
-cval *
-builtin_error(cenv *env, cval *x)
+Value *
+builtin_error(Environment *env, Value *x)
 {
     CASSERT_NUM("error", x, 1);
     CASSERT_TYPE("error", x, 0, CoolValue_String);
-    cval *error = cval_error(x->cell[0]->string);
-    cval_delete(x);
+    Value *error = Value_error(x->cell[0]->string);
+    Value_delete(x);
     return error;
 }
 
-cval *
-builtin_read(cenv *env, cval *x)
+Value *
+builtin_read(Environment *env, Value *x)
 {
     CASSERT_NUM("read", x, 1);
     CASSERT_TYPE("error", x, 0, CoolValue_String);
-    cval *byteList = cval_readContent(x->cell[0]->string);
-    cval_delete(x);
+    Value *byteList = Value_readContent(x->cell[0]->string);
+    Value_delete(x);
     return byteList;
 }
 
 void
-cenv_addBuiltin(cenv *env, char *name, cbuiltin function)
+Environment_addBuiltin(Environment *env, char *name, cbuiltin function)
 {
-    cval *key = cval_symbol(name);
-    cval *value = cval_builtin(function);
-    cenv_put(env, key, value);
-    cval_delete(key);
-    cval_delete(value);
+    Value *key = Value_symbol(name);
+    Value *value = Value_builtin(function);
+    Environment_put(env, key, value);
+    Value_delete(key);
+    Value_delete(value);
 }
 
 void 
-cenv_addBuiltinFunctions(cenv *env) 
+Environment_addBuiltinFunctions(Environment *env)
 {
-    cenv_addBuiltin(env, "load", builtin_load);
-    cenv_addBuiltin(env, "print", builtin_print);
-    cenv_addBuiltin(env, "error", builtin_error);
+    Environment_addBuiltin(env, "load", builtin_load);
+    Environment_addBuiltin(env, "print", builtin_print);
+    Environment_addBuiltin(env, "error", builtin_error);
 
-    cenv_addBuiltin(env, "read", builtin_read);
-    // cenv_addBuiltin(env, "write", builtin_write);
+    Environment_addBuiltin(env, "read", builtin_read);
+    // Environment_addBuiltin(env, "write", builtin_write);
 
-    cenv_addBuiltin(env, "\\", builtin_lambda);
-    cenv_addBuiltin(env, "def", builtin_def);
-    cenv_addBuiltin(env, "=", builtin_put);
+    Environment_addBuiltin(env, "\\", builtin_lambda);
+    Environment_addBuiltin(env, "def", builtin_def);
+    Environment_addBuiltin(env, "=", builtin_put);
 
-    cenv_addBuiltin(env, "if", builtin_if);
-    cenv_addBuiltin(env, "==", builtin_equal);
-    cenv_addBuiltin(env, "!=", builtin_notequal);
-    cenv_addBuiltin(env, ">", builtin_gt);
-    cenv_addBuiltin(env, "<", builtin_lt);
-    cenv_addBuiltin(env, ">=", builtin_gte);
-    cenv_addBuiltin(env, "<=", builtin_lte);
+    Environment_addBuiltin(env, "if", builtin_if);
+    Environment_addBuiltin(env, "==", builtin_equal);
+    Environment_addBuiltin(env, "!=", builtin_notequal);
+    Environment_addBuiltin(env, ">", builtin_gt);
+    Environment_addBuiltin(env, "<", builtin_lt);
+    Environment_addBuiltin(env, ">=", builtin_gte);
+    Environment_addBuiltin(env, "<=", builtin_lte);
 
-    cenv_addBuiltin(env, "list", builtin_list);
-    cenv_addBuiltin(env, "eval", builtin_eval);
-    cenv_addBuiltin(env, "join", builtin_join);
-    cenv_addBuiltin(env, "head", builtin_head);
-    cenv_addBuiltin(env, "tail", builtin_tail);
+    Environment_addBuiltin(env, "list", builtin_list);
+    Environment_addBuiltin(env, "eval", builtin_eval);
+    Environment_addBuiltin(env, "join", builtin_join);
+    Environment_addBuiltin(env, "head", builtin_head);
+    Environment_addBuiltin(env, "tail", builtin_tail);
 
-    cenv_addBuiltin(env, "+", builtin_add);
-    cenv_addBuiltin(env, "-", builtin_sub);
-    cenv_addBuiltin(env, "*", builtin_mul);
-    cenv_addBuiltin(env, "/", builtin_div);
+    Environment_addBuiltin(env, "+", builtin_add);
+    Environment_addBuiltin(env, "-", builtin_sub);
+    Environment_addBuiltin(env, "*", builtin_mul);
+    Environment_addBuiltin(env, "/", builtin_div);
     // caw: xor, exponentation, etc
 }
 
-cval *
-cval_evaluateExpression(cenv *env, cval *value)
+Value *
+Value_evaluateExpression(Environment *env, Value *value)
 {
     // Evaluate each expression
     for (int i = 0; i < value->count; i++) {
-        value->cell[i] = cval_eval(env, value->cell[i]);
+        value->cell[i] = Value_eval(env, value->cell[i]);
     }
 
     // If one is an error, take it and return it
     for (int i = 0; i < value->count; i++) {
         if (value->cell[i]->type == CoolValue_Error) {
-            return cval_take(value, i);
+            return Value_take(value, i);
         }
     }
 
@@ -1195,31 +1165,31 @@ cval_evaluateExpression(cenv *env, cval *value)
     }
 
     if (value->count == 1) {
-        return cval_take(value, 0);
+        return Value_take(value, 0);
     }
 
-    cval *funcSymbol = cval_pop(value, 0);
+    Value *funcSymbol = Value_pop(value, 0);
     if (funcSymbol->type != CoolValue_Function) {
-        cval_delete(funcSymbol);
-        cval_delete(value);
-        return cval_error("S-expression does not start with a function, got type %s", cval_typeString(funcSymbol->type));
+        Value_delete(funcSymbol);
+        Value_delete(value);
+        return Value_error("S-expression does not start with a function, got type %s", Value_typeString(funcSymbol->type));
     }
 
-    cval *result = cval_call(env, funcSymbol, value);
-    cval_delete(funcSymbol);
+    Value *result = Value_call(env, funcSymbol, value);
+    Value_delete(funcSymbol);
 
     return result;
 }
 
-cval *
-cval_eval(cenv* env, cval *value) 
+Value *
+Value_eval(Environment* env, Value *value) 
 {
     if (value->type == CoolValue_Symbol) {
-        cval *result = cenv_get(env, value);
-        cval_delete(value);
+        Value *result = Environment_get(env, value);
+        Value_delete(value);
         return result;
     } else if (value->type == CoolValue_Sexpr) {
-        return cval_evaluateExpression(env, value);
+        return Value_evaluateExpression(env, value);
     }
     return value;
 }

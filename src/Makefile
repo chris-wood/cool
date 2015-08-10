@@ -4,8 +4,8 @@ LIBRARIES=-ledit -lm
 
 all: cool cooli
 
-cool: cool.c
-	$(CC) $(CFLAGS) -c cool.c mpc.c 
+cool: cool.c mpc.c
+	$(CC) $(CFLAGS) -shared -o cool.so cool.c mpc.c 
 
-cooli: cooli.c cool
-	$(CC) $(CFLAGS) cooli.c cool.o mpc.o -o cooli $(LIBRARIES)
+cooli: cooli.o
+	$(CC) $(CFLAGS) -o cooli cooli.c cool.so $(LIBRARIES)

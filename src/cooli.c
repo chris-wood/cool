@@ -1,5 +1,7 @@
-// TODO: only expose the headers necessary
-#include "cool.c"
+#include <editline/readline.h>
+#include <stdlib.h>
+#include "mpc.h"
+#include "cool.h"
 
 int 
 main(int argc, char** argv) 
@@ -36,18 +38,18 @@ main(int argc, char** argv)
     printf("Press ctrl+c to exit\n");
 
     // Setup the environment
-    cenv *env = cenv_new();
-    cenv_addBuiltinFunctions(env);
+    Environment *env = Environment_new();
+    Environment_addBuiltinFunctions(env);
 
     // Handle command line arguments
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
-            cval *args = cval_add(cval_sexpr(), cval_string(argv[i]));
-            cval *x = builtin_load(env, args);
-            if (x->type == CoolValue_Error) {
-                cval_println(x);
+            Value *args = Value_add(Value_sexpr(), Value_string(argv[i]));
+            Value *x = builtin_load(env, args);
+            if (Value_getType(x) == CoolValue_Error) {
+                Value_println(x);
             }
-            cval_delete(x);
+            Value_delete(x);
         }
     }
 
@@ -57,11 +59,11 @@ main(int argc, char** argv)
 
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
-            cval *input = cval_read(r.output);
-            cval_println(input);
-            cval *x = cval_eval(env, input);
-            cval_println(x);
-            cval_delete(x);
+            Value *input = Value_read(r.output);
+            Value_println(input);
+            Value *x = Value_eval(env, input);
+            Value_println(x);
+            Value_delete(x);
             mpc_ast_delete(r.output);
         } else {
             mpc_err_print(r.error);
@@ -71,7 +73,7 @@ main(int argc, char** argv)
         free(input);
     }
     
-    cenv_delete(env);
+    Environment_delete(env);
 
     mpc_cleanup(8, Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
 
