@@ -21,3 +21,4 @@
 (fun {or x y} {+ x y}) ; nonzero will yield nonzero
 (fun {and x y} (* x y)) ; 0 will make it go to 0
 
+### TODO: index into list, list length, last item, subset of items, drop n items, split
