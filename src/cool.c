@@ -597,7 +597,9 @@ Value *
 Value_call(Environment *env, Value *function, Value *x)
 {
     if (function->builtin) {
-        return function->builtin(env, x);
+        Value *val = function->builtin(env, x);
+        printf("returning %s\n", Value_typeString(val));
+        return val;
     }
 
     int given = x->count;
@@ -872,14 +874,16 @@ builtin_long_order(Environment *env, Value *x, char *operator)
     }
 
     Value_delete(x);
+    printf("returning long %lu\n", ret);
     return Value_longInteger(ret);
 }
 
 Value *
 builtin_order(Environment *env, Value *x, char *operator) 
 {
+    printf("order\n");
     CASSERT_NUM(operator, x, 2);
-    if (x->cell[0]->type == CoolValue_LongInteger || x->cell[0]->type == CoolValue_Byte) {
+    if (x->cell[1]->type == CoolValue_LongInteger || x->cell[1]->type == CoolValue_Byte) {
         CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger | CoolValue_Byte);
         CASSERT_TYPE(operator, x, 1, CoolValue_LongInteger | CoolValue_Byte);
         return builtin_long_order(env, x, operator);
@@ -926,7 +930,11 @@ builtin_compare(Environment *env, Value *x, char *operator) {
     }
 
     Value_delete(x);
-    return Value_longInteger(ret);
+    Value *result = Value_longInteger(ret);
+    // TODO: this is... not the right type.
+    printf("comparison for equal %s, returning %d, %lu\n", Value_typeString(result), result->type == CoolValue_LongInteger, ret);
+
+    return result;
 }
 
 Value *
@@ -944,6 +952,8 @@ builtin_notequal(Environment *env, Value *x)
 Value *
 builtin_if(Environment *env, Value *x)
 {
+    printf("type of x->cell[0] == %s\n", Value_typeString(x->cell[0]));
+
     CASSERT_NUM("if", x, 3);
     CASSERT_TYPE("if", x, 0, CoolValue_LongInteger);
     CASSERT_TYPE("if", x, 1, CoolValue_Qexpr);
@@ -1142,6 +1152,7 @@ Environment_addBuiltinFunctions(Environment *env)
     Environment_addBuiltin(env, "-", builtin_sub);
     Environment_addBuiltin(env, "*", builtin_mul);
     Environment_addBuiltin(env, "/", builtin_div);
+    
     // caw: xor, exponentation, etc
 }
 
