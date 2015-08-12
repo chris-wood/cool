@@ -598,7 +598,6 @@ Value_call(Environment *env, Value *function, Value *x)
 {
     if (function->builtin) {
         Value *val = function->builtin(env, x);
-        printf("returning %s\n", Value_typeString(val->type));
         return val;
     }
 
@@ -874,14 +873,12 @@ builtin_long_order(Environment *env, Value *x, char *operator)
     }
 
     Value_delete(x);
-    printf("returning long %u\n", ret);
     return Value_longInteger(ret);
 }
 
 Value *
 builtin_order(Environment *env, Value *x, char *operator) 
 {
-    printf("order\n");
     CASSERT_NUM(operator, x, 2);
     if (x->cell[1]->type == CoolValue_LongInteger || x->cell[1]->type == CoolValue_Byte) {
         CASSERT_TYPE(operator, x, 0, CoolValue_LongInteger | CoolValue_Byte);
@@ -931,8 +928,6 @@ builtin_compare(Environment *env, Value *x, char *operator) {
 
     Value_delete(x);
     Value *result = Value_longInteger(ret);
-    // TODO: this is... not the right type.
-    printf("comparison for equal %s, returning %d, %u\n", Value_typeString(result->type), result->type == CoolValue_LongInteger, ret);
 
     return result;
 }
@@ -952,8 +947,6 @@ builtin_notequal(Environment *env, Value *x)
 Value *
 builtin_if(Environment *env, Value *x)
 {
-    printf("type of x->cell[0] == %s\n", Value_typeString(x->cell[0]->type));
-
     CASSERT_NUM("if", x, 3);
     CASSERT_TYPE("if", x, 0, CoolValue_LongInteger);
     CASSERT_TYPE("if", x, 1, CoolValue_Qexpr);
