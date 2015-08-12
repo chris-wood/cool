@@ -16,7 +16,7 @@ typedef enum {
 
 // Primitive types
 typedef enum {
-    CoolValue_LongInteger,
+    CoolValue_LongInteger = 1,
     CoolValue_Double,
     CoolValue_Byte,
     CoolValue_String,

@@ -51,7 +51,7 @@ Value *builtin_list(Environment *env, Value *x);
     }
 
 #define CASSERT_TYPE(func, args, index, expect) \
-    CASSERT(args, (args->cell[index]->type & expect) > 1, \
+    CASSERT(args, (args->cell[index]->type & expect) > 0, \
         "Function '%s' passed incorrect type for argument %i. Got %s, Expected %s.", \
         func, index, Value_typeString(args->cell[index]->type), Value_typeString(expect));
 
@@ -598,7 +598,7 @@ Value_call(Environment *env, Value *function, Value *x)
 {
     if (function->builtin) {
         Value *val = function->builtin(env, x);
-        printf("returning %s\n", Value_typeString(val));
+        printf("returning %s\n", Value_typeString(val->type));
         return val;
     }
 
@@ -874,7 +874,7 @@ builtin_long_order(Environment *env, Value *x, char *operator)
     }
 
     Value_delete(x);
-    printf("returning long %lu\n", ret);
+    printf("returning long %u\n", ret);
     return Value_longInteger(ret);
 }
 
@@ -932,7 +932,7 @@ builtin_compare(Environment *env, Value *x, char *operator) {
     Value_delete(x);
     Value *result = Value_longInteger(ret);
     // TODO: this is... not the right type.
-    printf("comparison for equal %s, returning %d, %lu\n", Value_typeString(result), result->type == CoolValue_LongInteger, ret);
+    printf("comparison for equal %s, returning %d, %u\n", Value_typeString(result->type), result->type == CoolValue_LongInteger, ret);
 
     return result;
 }
@@ -952,7 +952,7 @@ builtin_notequal(Environment *env, Value *x)
 Value *
 builtin_if(Environment *env, Value *x)
 {
-    printf("type of x->cell[0] == %s\n", Value_typeString(x->cell[0]));
+    printf("type of x->cell[0] == %s\n", Value_typeString(x->cell[0]->type));
 
     CASSERT_NUM("if", x, 3);
     CASSERT_TYPE("if", x, 0, CoolValue_LongInteger);
