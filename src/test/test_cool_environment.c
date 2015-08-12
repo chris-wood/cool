@@ -14,8 +14,9 @@
 // void Environment_def(Environment *env, Value *key, Value *value)
 
 static void test_Environment_new(void **state) {
-    // TODO
-    // assert_true(value->type == CoolValue_LongInteger);
+    Environment *env = Environment_new();
+    assert_true(env != NULL);
+    assert_true(env->parent == NULL);
 }
 
 int 
