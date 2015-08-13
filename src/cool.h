@@ -16,7 +16,7 @@ typedef enum {
 
 // Primitive types
 typedef enum {
-    CoolValue_LongInteger = 1,
+    CoolValue_Integer = 1,
     CoolValue_Double,
     CoolValue_Byte,
     CoolValue_String,
@@ -37,17 +37,17 @@ mpc_parser_t* Qexpr;
 mpc_parser_t* Expr;
 mpc_parser_t* Cool;
 
-CoolValue Value_getType(Value *value);
-void Environment_addBuiltinFunctions(Environment *env);
-Environment *Environment_new();
-Value *Value_add(Value *value, Value *x);
-Value *Value_string(char *str);
-Value *Value_sexpr();
-Value *builtin_load(Environment *env, Value *x);
-void Value_println(Value *value);
-void Value_delete(Value *value);
-void Environment_delete(Environment *env);
-Value *Value_eval(Environment *env, Value *value);
-Value *Value_read(mpc_ast_t *t);
+CoolValue value_GetType(Value *value);
+void environment_AddBuiltinFunctions(Environment *env);
+Environment *environment_Create();
+Value *value_AddCell(Value *value, Value *x);
+Value *value_String(char *str);
+Value *value_SExpr();
+Value *builtin_Load(Environment *env, Value *x);
+void value_Println(Value *value);
+void value_Delete(Value *value);
+void environment_Delete(Environment *env);
+Value *value_Eval(Environment *env, Value *value);
+Value *value_Read(mpc_ast_t *t);
 
 #endif 
