@@ -38,18 +38,18 @@ main(int argc, char** argv)
     printf("Press ctrl+c to exit\n");
 
     // Setup the environment
-    Environment *env = environment_Create();
-    environment_AddBuiltinFunctions(env);
+    Environment *env = Environment_new();
+    Environment_addBuiltinFunctions(env);
 
     // Handle command line arguments
     if (argc > 1) {
         for (int i = 1; i < argc; i++) {
-            Value *args = value_AddCell(value_SExpr(), value_String(argv[i]));
-            Value *x = builtin_Load(env, args);
-            if (value_GetType(x) == CoolValue_Error) {
-                value_Println(x);
+            Value *args = Value_add(Value_sexpr(), Value_string(argv[i]));
+            Value *x = builtin_load(env, args);
+            if (Value_getType(x) == CoolValue_Error) {
+                Value_println(x);
             }
-            value_Delete(x);
+            Value_delete(x);
         }
     }
 
@@ -59,11 +59,11 @@ main(int argc, char** argv)
 
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
-            Value *input = value_Read(r.output);
-            value_Println(input);
-            Value *x = value_Eval(env, input);
-            value_Println(x);
-            value_Delete(x);
+            Value *input = Value_read(r.output);
+            Value_println(input);
+            Value *x = Value_eval(env, input);
+            Value_println(x);
+            Value_delete(x);
             mpc_ast_delete(r.output);
         } else {
             mpc_err_print(r.error);
@@ -73,7 +73,7 @@ main(int argc, char** argv)
         free(input);
     }
     
-    environment_Delete(env);
+    Environment_delete(env);
 
     mpc_cleanup(8, Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
 
