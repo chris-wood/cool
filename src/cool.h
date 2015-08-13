@@ -8,6 +8,7 @@ struct cval;
 typedef struct cenv Environment;
 typedef struct cval Value;
 
+// COOL errors
 typedef enum {
     CoolValueError_DivideByZero,
     CoolValueError_BadOperator,
