@@ -3,30 +3,6 @@
 
 #include "mpc.h"
 
-struct cenv;
-struct cval;
-typedef struct cenv Environment;
-typedef struct cval Value;
-
-typedef enum {
-    CoolValueError_DivideByZero,
-    CoolValueError_BadOperator,
-    CoolValueError_BadNumber
-} CoolValueError;
-
-// Primitive types
-typedef enum {
-    CoolValue_Integer = 1,
-    CoolValue_Double,
-    CoolValue_Byte,
-    CoolValue_String,
-    CoolValue_Symbol,
-    CoolValue_Sexpr,
-    CoolValue_Qexpr,
-    CoolValue_Function,
-    CoolValue_Error
-} CoolValue;
-
 // Parsing grammars
 mpc_parser_t* Number;
 mpc_parser_t* Symbol;
@@ -37,17 +13,28 @@ mpc_parser_t* Qexpr;
 mpc_parser_t* Expr;
 mpc_parser_t* Cool;
 
-CoolValue value_GetType(Value *value);
-void environment_AddBuiltinFunctions(Environment *env);
-Environment *environment_Create();
-Value *value_AddCell(Value *value, Value *x);
-Value *value_String(char *str);
-Value *value_SExpr();
+// TODO: figure out where to put this
 Value *builtin_Load(Environment *env, Value *x);
-void value_Println(Value *value);
-void value_Delete(Value *value);
-void environment_Delete(Environment *env);
-Value *value_Eval(Environment *env, Value *value);
-Value *value_Read(mpc_ast_t *t);
+
+#define CASSERT_TYPE(func, args, index, expect) \
+    CASSERT(args, (args->cell[index]->type & expect) > 0, \
+        "Function '%s' passed incorrect type for argument %i. Got %s, Expected %s.", \
+        func, index, value_TypeString(args->cell[index]->type), value_TypeString(expect));
+
+#define CASSERT_NUM(func, args, num) \
+    CASSERT(args, args->count == num, \
+        "Function '%s' passed incorrect number of arguments. Got %i, Expected %i.", \
+        func, args->count, num);
+
+#define CASSERT_NOT_EMPTY(func, args, index) \
+    CASSERT(args, args->cell[index]->count != 0, \
+        "Function '%s' passed {} for argument %i.", func, index);
+
+#define CASSERT(args, cond, fmt, ...) \
+    if (!(cond)) { \
+        Value *error = value_Error(fmt, ##__VA_ARGS__); \
+        value_Delete(args); \
+        return error; \
+    }
 
 #endif 

@@ -1,0 +1,1040 @@
+#include <stdio.h>
+#include "cool_value.h"
+
+#define FILE_BLOCK_SIZE 128
+
+// builtin function
+typedef Value *(*cbuiltin)(Environment *, Value *);
+
+struct cval {
+    int type;
+    long number;
+    double fpnumber;
+
+    char *errorString;
+    char *symbolString;
+    char *string;
+
+    cbuiltin builtin;
+    Environment *env;
+    Value *formals;
+    Value *body;
+
+    int count;
+    struct cval ** cell;
+    int error;
+};
+
+// Forward declaration prototypes
+void value_Print(Value *value);
+Value *value_Eval(Environment *env, Value *value);
+void value_Delete(Value *value);
+Value *value_Error(char *fmt, ...);
+Value *value_Copy(Value *in);
+char *value_TypeString(int type);
+Value *builtin_eval(Environment *env, Value *x);
+Value *builtin_list(Environment *env, Value *x);
+
+CoolValue 
+value_GetType(Value *value)
+{
+    return (CoolValue) value->type;
+}
+
+Value *
+value_Integer(long x) 
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Integer;
+    value->number = x;
+    return value;
+}
+
+Value *
+value_Double(double x)
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Double;
+    value->fpnumber = x;
+    return value;
+}
+
+Value *
+value_Byte(char x)
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Byte;
+    value->number = (long) x;
+    return value;
+}
+
+Value *
+value_String(char *str)
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_String;
+    value->string = (char *) malloc((strlen(str) + 1) * sizeof(char));
+    strcpy(value->string, str);
+    return value;
+}
+
+Value *
+value_Symbol(char *symbol) 
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Symbol;
+    value->symbolString = (char *) malloc((strlen(symbol) + 1) * sizeof(char));
+    strcpy(value->symbolString, symbol);
+    return value;
+}
+
+Value * 
+value_SExpr() 
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Sexpr;
+    value->count = 0;
+    value->cell = NULL;
+    return value;
+}
+
+Value * 
+value_QExpr() 
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Qexpr;
+    value->count = 0;
+    value->cell = NULL;
+    return value;
+}
+
+Value *
+value_Builtin(cbuiltin function) 
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Function;
+    value->builtin = function;
+    return value;
+}
+
+Value *
+value_Lambda(Value *formals, Value *body)
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Function;
+    value->builtin = NULL;
+    value->env = environment_Create();
+    value->formals = formals;
+    value->body = body;
+    return value;
+}
+
+char *
+value_TypeString(int type)
+{
+    switch (type) {
+        case CoolValue_Error: 
+            return "CoolValue_Error";
+        case CoolValue_Function:
+            return "CoolValue_Function";
+        case CoolValue_Qexpr:
+            return "CoolValue_Qexpr";
+        case CoolValue_Sexpr:
+            return "CoolValue_Sexpr";
+        case CoolValue_Integer:
+            return "CoolValue_Integer";
+        case CoolValue_Double:
+            return "CoolValue_Double";
+        case CoolValue_Byte:
+            return "CoolValue_Byte";
+        case CoolValue_String:
+            return "CoolValue_String";
+        case CoolValue_Symbol:
+        default:
+            return "CoolValue_Symbol";
+    }
+}
+
+Value * 
+value_Error(char *fmt, ...) 
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Error;
+
+    va_list va;
+    va_start(va, fmt);
+
+    value->errorString = (char *) malloc(512); // arbitrary for all error strings (more than needed)
+    vsnprintf(value->errorString, 511, fmt, va);
+
+    value->errorString = (char *) realloc(value->errorString, strlen(value->errorString) + 1);
+    va_end(va);
+
+    return value;
+}
+
+Value *
+value_ReadContent(char *fileName)
+{
+    FILE *fp = fopen(fileName, "r");
+    if (fp == NULL) {
+        // TODO: insert interest issuance here
+        return value_Error("Unable to open file %s", fileName);
+    } else {
+        Value *value = value_SExpr();
+        char fileBuffer[FILE_BLOCK_SIZE]; // read in FILE_BLOCK_SIZE-byte blocks
+        size_t numBytesRead = 0;
+        for (;;) {
+            numBytesRead = fread(fileBuffer, 1, FILE_BLOCK_SIZE, fp);
+
+            // Copy fileBuffer bytes to the value list
+            int start = value->count;
+
+            value->count += numBytesRead;
+            value->cell = realloc(value->cell, sizeof(Value *) * value->count);
+
+            for (int i = 0; i < numBytesRead; i++) {
+                int index = start + i;
+                value->cell[index] = value_Byte(fileBuffer[i]);
+            }
+
+            // Reset the file buffer (to zeros) and check to see if we're done
+            memset(fileBuffer, 0, FILE_BLOCK_SIZE); 
+            if (numBytesRead != FILE_BLOCK_SIZE) {
+                break;
+            }
+        }
+        return value;
+    }
+}
+
+void 
+value_Delete(Value *value)
+{
+    switch (value->type) {
+        case CoolValue_Integer:
+        case CoolValue_Double:
+        case CoolValue_Byte:
+            break;
+        case CoolValue_String:
+            free(value->string);
+            break;
+        case CoolValue_Error:
+            free(value->errorString);
+            break;
+        case CoolValue_Symbol:
+            free(value->symbolString);
+            break;
+        case CoolValue_Sexpr:
+        case CoolValue_Qexpr:
+            for (int i = 0; i < value->count; i++) {
+                value_Delete(value->cell[i]);
+            }
+            free(value->cell);
+            break;
+        case CoolValue_Function:
+            if (value->builtin == NULL) {
+                Environment_delete(value->env);
+                value_Delete(value->formals);
+                value_Delete(value->body);
+            }
+            break;
+    }
+
+    free(value);
+}
+
+void
+value_PrintExpr(Value *value, char open, char close)
+{
+    putchar(open);
+    for (int i = 0; i < value->count; i++) {
+        value_Print(value->cell[i]);
+        if (i != (value->count - 1)) {
+            putchar(' ');
+        }
+    }
+    putchar(close);
+}
+
+void 
+value_Print(Value *value) 
+{
+    switch (value->type) {
+        case CoolValue_Integer: 
+            printf("%li", value->number);
+            break;
+        case CoolValue_Double: 
+            printf("%f", value->fpnumber);
+            break;
+        case CoolValue_Byte:
+            printf("%x", (uint8_t) value->number);
+            break;
+        case CoolValue_String: 
+            printf("'%s'", value->string);
+            break;
+        case CoolValue_Error:
+            printf("Error: %s", value->errorString); 
+            break;
+        case CoolValue_Symbol:
+            printf("%s", value->symbolString);
+            break;
+        case CoolValue_Sexpr:
+            value_PrintExpr(value, '(', ')');
+            break;
+        case CoolValue_Qexpr:
+            value_PrintExpr(value, '{', '}');
+            break;
+        case CoolValue_Function:
+            if (value->builtin != NULL) {
+                printf("<builtin>");
+            } else {
+                printf("(\\ ");
+                value_Print(value->formals);
+                printf(" ");
+                value_Print(value->body);
+                printf(" ");
+            }
+            break;
+    }  
+}
+
+void 
+value_Println(Value *value) 
+{
+    value_Print(value);
+    putchar('\n');
+}
+
+Value *
+value_Copy(Value *in)
+{
+    Value *copy = (Value *) malloc(sizeof(Value));
+    copy->type = in->type;
+
+    switch (in->type) {
+        case CoolValue_Function:
+            if (in->builtin != NULL) {
+                copy->builtin = in->builtin;
+            } else {
+                copy->builtin = NULL;
+                copy->env = environment_Copy(in->env);
+                copy->formals = value_Copy(in->formals);
+                copy->body = value_Copy(in->body);
+            }
+            break;
+        case CoolValue_Integer:
+        case CoolValue_Byte:
+            copy->number = in->number;
+            break;
+        case CoolValue_Double:
+            copy->fpnumber = in->fpnumber;
+            break;
+        case CoolValue_String: 
+            copy->string = (char *) malloc((strlen(in->string) + 1) * sizeof(char));
+            strcpy(copy->string, in->string);
+            break;
+        case CoolValue_Error:
+            copy->errorString = (char *) malloc((strlen(in->errorString) + 1) * sizeof(char));
+            strcpy(copy->errorString, in->errorString);
+            break;
+        case CoolValue_Symbol:
+            copy->symbolString = (char *) malloc((strlen(in->symbolString) + 1) * sizeof(char));
+            strcpy(copy->symbolString, in->symbolString);
+            break;
+        case CoolValue_Sexpr:
+        case CoolValue_Qexpr:
+            copy->count = in->count;
+            copy->cell = (Value **) malloc(sizeof(Value *) * copy->count);
+            for (int i = 0; i < copy->count; i++) {
+                copy->cell[i] = value_Copy(in->cell[i]);
+            }
+            break;
+    }
+
+    return copy;
+}
+
+Value *
+value_AddCell(Value *value, Value *x) 
+{
+    value->count++;
+    value->cell = realloc(value->cell, sizeof(Value *) * value->count);
+    value->cell[value->count - 1] = x;
+    return value;
+}
+
+Value * 
+value_ReadInteger(mpc_ast_t* t) 
+{
+    errno = 0;
+    long x = strtol(t->contents, NULL, 10);
+    return errno != ERANGE ? value_Integer(x) : value_Error("invalid number");
+}
+
+Value *
+value_ReadDouble(mpc_ast_t* t)
+{
+    errno = 0;
+    double x = atof(t->contents);
+    return value_Double(x);
+}
+
+Value *
+value_ReadNumber(mpc_ast_t* t)
+{
+    if (strstr(t->contents, ".")) {
+        return value_ReadDouble(t);
+    } else {
+        return value_ReadInteger(t);
+    }
+}
+
+Value *
+value_ReadString(mpc_ast_t *t)
+{
+    t->contents[strlen(t->contents) - 1] = '\0';
+    char *unescaped = (char *) malloc(strlen(t->contents + 1) + 1); // quote at start and end
+    strcpy(unescaped, t->contents + 1);
+    unescaped = mpcf_unescape(unescaped); // drop quotes
+    Value *string = value_String(unescaped);
+    free(unescaped);
+    return string;
+}
+
+Value *
+value_Read(mpc_ast_t *t) 
+{
+    if (strstr(t->tag, "number")) {
+        return value_ReadNumber(t);
+    }
+    if (strstr(t->tag, "symbol")) {
+        return value_Symbol(t->contents);
+    }
+    if (strstr(t->tag, "string")) {
+        return value_ReadString(t);
+    }
+
+    Value *x = NULL;
+    if (strcmp(t->tag, ">") == 0) {
+        x = value_SExpr();
+    }
+    if (strstr(t->tag, "sexpr")) {
+        x = value_SExpr();
+    }
+    if (strstr(t->tag, "qexpr")) {
+        x = value_QExpr();
+    }
+
+    for (int i = 0; i < t->children_num; i++) {
+        if (strcmp(t->children[i]->contents, "(") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->contents, ")") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->contents, "}") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->contents, "{") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->tag, "regex") == 0) {
+            continue;
+        }
+        if (strcmp(t->children[i]->tag, "comment") == 0) {
+            continue;
+        }
+        x = value_AddCell(x, value_Read(t->children[i]));
+    }
+
+    return x;
+}
+
+Value *
+value_PopCell(Value *value, int i)
+{
+    Value *x = value->cell[i];
+    memmove(&value->cell[i], &value->cell[i + 1], sizeof(Value *) * (value->count - 1));
+    value->count--;
+    value->cell = realloc(value->cell, sizeof(Value *) * value->count);
+    return x;
+}
+
+Value *
+value_TakeCell(Value *value, int i) 
+{
+    Value *x = value_PopCell(value, i);
+    value_Delete(value);
+    return x;
+}
+
+Value *
+value_Join(Value *x, Value *y)
+{
+    while (y->count > 0) {
+        x = value_AddCell(x, value_PopCell(y, 0));
+    }
+    value_Delete(y);
+    return x;
+}
+
+Value *
+value_Call(Environment *env, Value *function, Value *x)
+{
+    if (function->builtin) {
+        Value *val = function->builtin(env, x);
+        return val;
+    }
+
+    int given = x->count;
+    int total = function->formals->count;
+
+    while (x->count > 0) {
+        if (function->formals->count == 0) {
+            value_Delete(x);
+            return value_Error("Function was given too many arguments. Got %d, expected %d", given, total);
+        }
+
+        Value *symbol = value_PopCell(function->formals, 0);
+
+        if (strcmp(symbol->symbolString, "&") == 0) {
+            if (function->formals->count != 1) {
+                value_Delete(x);
+                return value_Error("Function format invalid. ", "Symbol '&' not followed by single symbol.");
+            }
+
+            Value* nsym = value_PopCell(function->formals, 0);
+            environment_PutKeyValue(function->env, nsym, builtin_list(env, x));
+            value_Delete(symbol); 
+            value_Delete(nsym);
+            break;
+        }
+
+        Value *value = value_PopCell(x, 0);
+        
+        environment_PutKeyValue(function->env, symbol, value);
+
+        value_Delete(symbol);
+        value_Delete(value);
+    }
+
+    value_Delete(x);
+
+    if (function->formals->count > 0 && strcmp(function->formals->cell[0]->symbolString, "&") == 0) {
+        if (function->formals->count != 2) {
+            return value_Error("Function format invalid. ", "Symbol '&' not followed by single symbol.");
+        }
+
+        value_Delete(value_PopCell(function->formals, 0));
+
+        Value* sym = value_PopCell(function->formals, 0);
+        Value* val = value_QExpr();
+
+        environment_PutKeyValue(function->env, sym, val);
+        value_Delete(sym); 
+        value_Delete(val);
+    }
+
+    if (function->formals->count == 0) {
+        function->env->parent = env;
+        Value *newFunctionBody = value_AddCell(value_SExpr(), value_Copy(function->body));
+        return builtin_eval(function->env, newFunctionBody);
+    } else {
+        return value_Copy(function);
+    }
+}
+
+int 
+Value_equal(Value *x, Value *y)
+{
+    if (x->type != y->type) {
+        return 0;
+    }
+
+    switch (x->type) {
+        case CoolValue_Integer:
+        case CoolValue_Byte:
+            return x->number == y->number;
+        case CoolValue_Double:
+            return x->fpnumber == y->fpnumber;
+        case CoolValue_String:
+            return (strcmp(x->string, y->string) == 0);
+        case CoolValue_Symbol:
+            return (strcmp(x->symbolString, y->symbolString) == 0);
+        case CoolValue_Error:
+            return (strcmp(x->errorString, y->errorString) == 0);
+        case CoolValue_Function:
+            if (x->builtin || y->builtin) {
+                return x->builtin == y->builtin;
+            } else {
+                return Value_equal(x->formals, y->formals) && Value_equal(x->body, y->body);
+            }
+        case CoolValue_Sexpr:
+        case CoolValue_Qexpr:
+            if (x->count != y->count) {
+                return 0;
+            }
+            for (int i = 0; i < x->count; i++) {
+                int valuesEqual = Value_equal(x->cell[i], y->cell[i]);
+                if (valuesEqual == 0) { // values not equal
+                    return 0;
+                }
+            }
+            return 1; // must have been true, we didn't short circuit
+    }
+
+    return 0; // false by default
+}
+
+Value *
+value_EvaluateExpression(Environment *env, Value *value)
+{
+    // Evaluate each expression
+    for (int i = 0; i < value->count; i++) {
+        value->cell[i] = value_Eval(env, value->cell[i]);
+    }
+
+    // If one is an error, take it and return it
+    for (int i = 0; i < value->count; i++) {
+        if (value->cell[i]->type == CoolValue_Error) {
+            return value_TakeCell(value, i);
+        }
+    }
+
+    if (value->count == 0) {
+        return value;
+    }
+
+    if (value->count == 1) {
+        return value_TakeCell(value, 0);
+    }
+
+    Value *funcSymbol = value_PopCell(value, 0);
+    if (funcSymbol->type != CoolValue_Function) {
+        value_Delete(funcSymbol);
+        value_Delete(value);
+        return value_Error("S-expression does not start with a function, got type %s", value_TypeString(funcSymbol->type));
+    }
+
+    Value *result = value_Call(env, funcSymbol, value);
+    value_Delete(funcSymbol);
+
+    return result;
+}
+
+Value *
+value_Eval(Environment* env, Value *value) 
+{
+    if (value->type == CoolValue_Symbol) {
+        Value *result = environment_Get(env, value);
+        value_Delete(value);
+        return result;
+    } else if (value->type == CoolValue_Sexpr) {
+        return value_EvaluateExpression(env, value);
+    }
+    return value;
+}
+
+// Internal 
+Value *
+builtin_lambda(Environment *env, Value *x) 
+{
+    CASSERT_NUM("\\", x, 2);
+    CASSERT_TYPE("\\", x, 0, CoolValue_Qexpr);
+    CASSERT_TYPE("\\", x, 1, CoolValue_Qexpr);
+
+    for (int i = 0; i < x->cell[0]->count; i++) {
+        CASSERT(x, (x->cell[0]->cell[i]->type == CoolValue_Symbol), "Cannot define non-symbol. Got %s, Expected %s", 
+            value_TypeString(x->cell[0]->cell[i]->type), value_TypeString(CoolValue_Symbol));
+    }
+
+    Value *formals = value_PopCell(x, 0);
+    Value *body = value_PopCell(x, 0);
+    value_Delete(x);
+
+    Value *lambda = value_Lambda(formals, body);
+
+    return lambda;
+}
+
+Value *
+builtin_var(Environment *env, Value *val, char *function) 
+{
+    CASSERT(val, val->count > 0, "Function 'def' expected non-empty variable declaration, got %d", val->count);
+    CASSERT(val, val->cell[0]->type == CoolValue_Qexpr, "Function 'def' passed incorrect type, got %s", value_TypeString(val->cell[0]->type));
+
+    Value *symbols = val->cell[0];
+
+    // value_Println(val);
+    // value_Println(symbols);
+
+    for (int i = 0; i < symbols->count; i++) {
+        CASSERT(val, symbols->cell[i]->type == CoolValue_Symbol, "Function 'def' cannot define a non-symbol, got %s", value_TypeString(symbols->cell[i]->type));
+    }
+
+    CASSERT(val, symbols->count == val->count - 1, "Function 'def' cannot define incorrect number of values to symbols, got %d", symbols->count);
+
+    for (int i = 0; i < symbols->count; i++) {
+        if (strcmp(function, "def") == 0) {
+            environment_DefineKeyValue(env, symbols->cell[i], val->cell[i + 1]);
+        } 
+
+        if (strcmp(function, "=") == 0) {
+            environment_PutKeyValue(env, symbols->cell[i], val->cell[i + 1]);
+        }
+    }
+
+    value_Delete(val);
+
+    return value_SExpr();
+}
+
+Value *
+builtin_def(Environment *env, Value *val)
+{
+    return builtin_var(env, val, "def");
+}
+
+Value *
+builtin_put(Environment *env, Value *val)
+{
+    return builtin_var(env, val, "put");
+}
+
+Value *
+builtin_head(Environment *env, Value *x)
+{
+    CASSERT(x, x->count == 1, "Function 'head' passed to many arguments, got %d", x->count);
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'head' passed incorrect type, got %s", value_TypeString(x->cell[0]->type));
+    CASSERT(x, x->cell[0]->count > 0, "Function 'head' passed {}, got %d", x->cell[0]->count);
+
+    Value *head = value_TakeCell(x, 0);
+    while (head->count > 1) {
+        value_Delete(value_PopCell(head, 1));
+    }
+
+    return head;
+}
+
+Value *
+builtin_tail(Environment *env, Value *x)
+{
+    CASSERT(x, x->count == 1, "Function 'head' passed to many arguments, got %d", x->count);
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'tail' passed incorrect type, got %s", value_TypeString(x->cell[0]->type));
+    CASSERT(x, x->cell[0]->count > 0, "Function 'head' passed {}, got %d", x->cell[0]->count);
+
+    Value *head = value_TakeCell(x, 0);
+    value_Delete(value_PopCell(head, 0));
+    Value *tail = head;
+
+    return tail;
+}
+
+Value *
+builtin_list(Environment *env, Value *x)
+{
+    x->type = CoolValue_Qexpr;
+    return x;
+}
+
+Value *
+builtin_eval(Environment *env, Value *x)
+{
+    CASSERT(x, x->count == 1, "Function 'eval' passed too many arguments, got %d", x->count);
+    CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'eval' passed incorrect type, got %s", value_TypeString(x->cell[0]->type));
+
+    // pop the head and evaluate it
+    Value *head = value_TakeCell(x, 0);
+    head->type = CoolValue_Sexpr;
+    Value *evalResult = value_Eval(env, head);
+
+    return evalResult;
+}
+
+Value *
+builtin_join(Environment *env, Value *x)
+{
+    for (int i = 0; i < x->count; i++) {
+        CASSERT(x, x->cell[i]->type == CoolValue_Qexpr, "Function 'join' passed incorrect type, got %s", x->cell[i]->type);
+    }
+
+    Value *y = value_PopCell(x, 0);
+    while (x->count > 0) {
+        Value *z = value_PopCell(x, 0);
+        y = value_Join(y, z);
+    }
+
+    value_Delete(x);
+
+    return y;
+}
+
+Value *
+builtin_double_order(Environment *env, Value *x, char *operator) 
+{
+    int ret = 0;
+    if (strcmp(operator, ">") == 0) {
+        ret = (x->cell[0]->fpnumber > x->cell[1]->fpnumber);
+    } else if (strcmp(operator, "<") == 0) {
+        ret = (x->cell[0]->fpnumber < x->cell[1]->fpnumber);
+    } else if (strcmp(operator, ">=") == 0) {
+        ret = (x->cell[0]->fpnumber >= x->cell[1]->fpnumber);
+    } else if (strcmp(operator, "<=") == 0) {
+        ret = (x->cell[0]->fpnumber <= x->cell[1]->fpnumber);
+    } else {
+        value_Delete(x);
+        return value_Error("Error: unexpected operator in 'builtin_order': %s", operator);
+    }
+
+    value_Delete(x);
+    return value_Integer(ret);
+}
+
+Value *
+builtin_long_order(Environment *env, Value *x, char *operator) 
+{
+    int ret = 0;
+    if (strcmp(operator, ">") == 0) {
+        ret = (x->cell[0]->number > x->cell[1]->number);
+    } else if (strcmp(operator, "<") == 0) {
+        ret = (x->cell[0]->number < x->cell[1]->number);
+    } else if (strcmp(operator, ">=") == 0) {
+        ret = (x->cell[0]->number >= x->cell[1]->number);
+    } else if (strcmp(operator, "<=") == 0) {
+        ret = (x->cell[0]->number <= x->cell[1]->number);
+    } else {
+        value_Delete(x);
+        return value_Error("Error: unexpected operator in 'builtin_order': %s", operator);
+    }
+
+    value_Delete(x);
+    return value_Integer(ret);
+}
+
+Value *
+builtin_order(Environment *env, Value *x, char *operator) 
+{
+    CASSERT_NUM(operator, x, 2);
+    if (x->cell[1]->type == CoolValue_Integer || x->cell[1]->type == CoolValue_Byte) {
+        CASSERT_TYPE(operator, x, 0, CoolValue_Integer | CoolValue_Byte);
+        CASSERT_TYPE(operator, x, 1, CoolValue_Integer | CoolValue_Byte);
+        return builtin_long_order(env, x, operator);
+    } else {
+        CASSERT_TYPE(operator, x, 0, CoolValue_Double);
+        CASSERT_TYPE(operator, x, 1, CoolValue_Double);
+        return builtin_double_order(env, x, operator);
+    }
+}
+
+Value *
+builtin_gt(Environment *env, Value *x)
+{
+    return builtin_order(env, x, ">");
+}
+
+Value *
+builtin_lt(Environment *env, Value *x)
+{
+    return builtin_order(env, x, "<");
+}
+
+Value *
+builtin_gte(Environment *env, Value *x)
+{
+    return builtin_order(env, x, ">=");
+}
+
+Value *
+builtin_lte(Environment *env, Value *x)
+{
+    return builtin_order(env, x, "<=");
+}
+
+Value *
+builtin_compare(Environment *env, Value *x, char *operator) {
+    CASSERT_NUM(operator, x, 2);
+    int ret = 0;
+
+    if (strcmp(operator, "==") == 0) {
+        ret = Value_equal(x->cell[0], x->cell[1]);
+    } else if (strcmp(operator, "!=") == 0) {
+        ret = !Value_equal(x->cell[0], x->cell[1]);
+    }
+
+    value_Delete(x);
+    Value *result = value_Integer(ret);
+
+    return result;
+}
+
+Value *
+builtin_equal(Environment *env, Value *x)
+{
+    return builtin_compare(env, x, "==");
+}
+
+Value *
+builtin_notequal(Environment *env, Value *x)
+{
+    return builtin_compare(env, x, "!=");
+}
+
+Value *
+builtin_if(Environment *env, Value *x)
+{
+    CASSERT_NUM("if", x, 3);
+    CASSERT_TYPE("if", x, 0, CoolValue_Integer);
+    CASSERT_TYPE("if", x, 1, CoolValue_Qexpr);
+    CASSERT_TYPE("if", x, 2, CoolValue_Qexpr);
+
+    Value *y;
+    x->cell[1]->type = CoolValue_Sexpr;
+    x->cell[2]->type = CoolValue_Sexpr;
+
+    if (x->cell[0]->number > 0) {
+        y = value_Eval(env, value_PopCell(x, 1));
+    } else {
+        y = value_Eval(env, value_PopCell(x, 2));
+    }
+
+    value_Delete(x);
+    return y;
+}
+
+Value *
+builtin_op(Environment *env, Value *expr, char* op) 
+{
+    for (int i = 0; i < expr->count; i++) {
+        if (expr->cell[i]->type != CoolValue_Integer && expr->cell[i]->type != CoolValue_Double) {
+            value_Delete(expr);
+            return value_Error("Cannot operate on a non-number, got type %s", value_TypeString(expr->cell[i]->type));
+        }
+    }
+
+    Value *x = value_PopCell(expr, 0);
+
+    if ((strcmp(op, "-") == 0) && expr->count == 0) {
+        x->number = -x->number;
+    }
+
+    while (expr->count > 0) {
+        Value *y = value_PopCell(expr, 0);
+        if (strcmp(op, "+") == 0) { 
+            x->number += y->number;
+        } 
+        if (strcmp(op, "-") == 0) { 
+            x->number -= y->number; 
+        }
+        if (strcmp(op, "*") == 0) { 
+            x->number *= y->number; 
+        }
+        if (strcmp(op, "/") == 0) { 
+            if (y->number == 0) {
+                value_Delete(x);
+                value_Delete(y);
+                x = value_Error("Division by zero.");
+                break;
+            }
+            x->number /= y->number;
+        }
+        value_Delete(y);
+    }
+
+    value_Delete(expr);
+    return x;
+}
+
+Value *
+builtin_add(Environment *env, Value *val)
+{
+    return builtin_op(env, val, "+");
+}
+
+Value *
+builtin_sub(Environment *env, Value *val)
+{
+    return builtin_op(env, val, "-");
+}
+
+Value *
+builtin_mul(Environment *env, Value *val)
+{
+    return builtin_op(env, val, "*");
+}
+
+Value *
+builtin_div(Environment *env, Value *val)
+{
+    return builtin_op(env, val, "/");
+}
+
+Value *
+builtin_Load(Environment *env, Value *x)
+{
+    CASSERT_NUM("load", x, 1);
+    CASSERT_TYPE("load", x, 0, CoolValue_String);
+
+    mpc_result_t result;
+    if (mpc_parse_contents(x->cell[0]->string, Cool, &result)) {
+        
+        Value *expr = value_Read(result.output);
+        mpc_ast_delete(result.output);
+
+        while (expr->count > 0) {
+            Value *top = value_PopCell(expr, 0);
+            Value *y = value_Eval(env, top);
+            if (y->type == CoolValue_Error) {
+                value_Println(y);
+            } 
+            value_Delete(y);
+        }
+
+        value_Delete(expr);
+        value_Delete(x);
+
+        return value_SExpr();
+    } else { // parsing error
+        char *errorMessage = mpc_err_string(result.error);
+        mpc_err_delete(result.error);
+
+        Value *error = value_Error("Could not load library %s", errorMessage);
+        free(errorMessage);
+        value_Delete(x);
+
+        return error;
+    }
+}
+
+Value * 
+builtin_Print(Environment *env, Value *x)
+{
+    for (int i = 0; i < x->count; i++) {
+        value_Print(x->cell[i]);
+        putchar(' ');
+    }
+    putchar('\n');
+    value_Delete(x);
+
+    return value_SExpr();
+}
+
+Value *
+builtin_Error(Environment *env, Value *x)
+{
+    CASSERT_NUM("error", x, 1);
+    CASSERT_TYPE("error", x, 0, CoolValue_String);
+    Value *error = value_Error(x->cell[0]->string);
+    value_Delete(x);
+    return error;
+}
+
+Value *
+builtin_Read(Environment *env, Value *x)
+{
+    CASSERT_NUM("read", x, 1);
+    CASSERT_TYPE("error", x, 0, CoolValue_String);
+    Value *byteList = value_ReadContent(x->cell[0]->string);
+    value_Delete(x);
+    return byteList;
+}
