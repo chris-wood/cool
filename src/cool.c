@@ -8,9 +8,9 @@
 typedef Value *(*cbuiltin)(Environment *, Value *);
 
 struct cval {
-    int type;
+    uint8_t type;
     union {
-        long number;
+        size_t number;
         double fpnumber;
         uint8_t byte;
     };
@@ -159,7 +159,7 @@ value_GetType(Value *value)
 }
 
 Value *
-value_Integer(long x) 
+value_Integer(size_t x) 
 {
     Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Integer;
@@ -177,7 +177,7 @@ value_Double(double x)
 }
 
 Value *
-value_Byte(char x)
+value_Byte(uint8_t x)
 {
     Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Byte;
