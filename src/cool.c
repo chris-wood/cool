@@ -9,8 +9,11 @@ typedef Value *(*cbuiltin)(Environment *, Value *);
 
 struct cval {
     int type;
-    long number;
-    double fpnumber;
+    union {
+        long number;
+        double fpnumber;
+        uint8_t byte;
+    };
 
     char *errorString;
     char *symbolString;
