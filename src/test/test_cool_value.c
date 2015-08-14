@@ -23,10 +23,10 @@ static void test_value_Double(void **state) {
 }
 
 static void test_value_Byte(void **state) {
-    uint8_t input = (uint8_t) 0xBEEF;
+    uint8_t input = (uint8_t) 0xAB;
     Value *value = value_Byte(input);
     assert_true(value->type == CoolValue_Byte);
-    assert_true(value->number == input);
+    assert_true(value->byte == input);
     assert_true(value->cell == NULL);
 }
 
