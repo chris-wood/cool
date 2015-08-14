@@ -13,17 +13,21 @@
 // Environment *Environment_copy(Environment *env);
 // void Environment_def(Environment *env, Value *key, Value *value)
 
-static void test_Environment_new(void **state) {
+static void test_environment_New(void **state) {
     Environment *env = Environment_new();
     assert_true(env != NULL);
     assert_true(env->parent == NULL);
+}
+
+static void test_environment_Delete(void **state) {
+
 }
 
 int 
 main(int argc, char **argv) 
 {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_Environment_new),
+        cmocka_unit_test(test_environment_New),
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
