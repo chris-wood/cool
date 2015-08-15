@@ -3,8 +3,8 @@
 #include "mpc.h"
 #include "cool.h"
 
-int 
-main(int argc, char** argv) 
+int
+main(int argc, char** argv)
 {
     Number = mpc_new("number");
     Symbol = mpc_new("symbol");
@@ -28,11 +28,11 @@ main(int argc, char** argv)
             cool    : /^/ <expr>* /$/ ;                         \
         ",
         Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
-    
+
     // Old number regex
     // number  : /-?[0-9]+/ ;
     // ^[-+]?[0-9]+\.[0-9]+$
-    // float   : /<number>('.'[0-9]+)?/ ; 
+    // float   : /<number>('.'[0-9]+)?/ ;
 
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
@@ -47,7 +47,7 @@ main(int argc, char** argv)
             Value *args = value_AddCell(value_SExpr(), value_String(argv[i]));
             Value *x = builtin_Load(env, args);
             if (value_GetType(x) == CoolValue_Error) {
-                value_Println(x);
+                value_Println(stdout, x);
             }
             value_Delete(x);
         }
@@ -60,9 +60,9 @@ main(int argc, char** argv)
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
             Value *input = value_Read(r.output);
-            value_Println(input);
+            value_Println(stdout, input);
             Value *x = value_Eval(env, input);
-            value_Println(x);
+            value_Println(stdout, x);
             value_Delete(x);
             mpc_ast_delete(r.output);
         } else {
@@ -72,7 +72,7 @@ main(int argc, char** argv)
 
         free(input);
     }
-    
+
     environment_Delete(env);
 
     mpc_cleanup(8, Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
