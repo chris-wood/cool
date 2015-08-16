@@ -76,6 +76,30 @@ static void test_value_Error(void **state) {
     value_Delete(error);
 }
 
+static void test_value_builtin_add(void **state) {
+    // pass
+}
+
+static void test_value_builtin_sub(void **state) {
+    // pass
+}
+
+static void test_value_builtin_mult(void **state) {
+    // pass
+}
+
+static void test_value_builtin_div(void **state) {
+    // pass
+}
+
+static void test_value_builtin_xor(void **state) {
+    // pass
+}
+
+static void test_value_builtin_exp(void **state) {
+    // pass
+}
+
 int
 main(int argc, char **argv)
 {
@@ -85,7 +109,13 @@ main(int argc, char **argv)
         cmocka_unit_test(test_value_Byte),
         cmocka_unit_test(test_value_String),
         cmocka_unit_test(test_value_Print),
-        cmocka_unit_test(test_value_Error)
+        cmocka_unit_test(test_value_Error),
+        cmocka_unit_test(test_value_builtin_add),
+        cmocka_unit_test(test_value_builtin_sub),
+        cmocka_unit_test(test_value_builtin_mult),
+        cmocka_unit_test(test_value_builtin_div),
+        cmocka_unit_test(test_value_builtin_xor),
+        cmocka_unit_test(test_value_builtin_exp)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
