@@ -4,25 +4,24 @@
 (def {false} 0)
 
 ; Function definition
-(def {fun} (\ {h t} { def (head h) (\ (tail h) t) }))
+; (def {fun} (\ {h t} { def (head h) (\ (tail h) t) }))
 
 ; Curry (and uncurry)
-(fun {unpack f l} {
-	eval (join (list f) l)
-})
-(fun {pack f & xs} {f xs})
-(def {curry} unpack)
-(def {uncurry} pack)
+; (fun {unpack f l} {
+;	eval (join (list f) l)
+;})
+;(fun {pack f & xs} {f xs})
+;(def {curry} unpack)
+;(def {uncurry} pack)
 
 ; Logical operators
-(fun {not x} {- 1 x})
-(fun {or x y} {+ x y}) ; nonzero will yield nonzero
-(fun {and x y} (* x y)) ; 0 will make it go to 0
+;(fun {not x} {- 1 x})
+;(fun {or x y} {+ x y}) ; nonzero will yield nonzero
+;(fun {and x y} (* x y)) ; 0 will make it go to 0
 
 ; TODO: index into list, list length, last item, subset of items, drop n items, split
-(fun {len l} {
-    if (== l nil) 
-        {0}
-        {+ 1 (len (tail l))}
-})
-
+;(fun {len l} {
+;    if (== l nil)
+;        {0}
+;        {+ 1 (len (tail l))}
+;})

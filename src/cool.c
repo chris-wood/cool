@@ -37,7 +37,7 @@ struct cenv {
 };
 
 // Forward declaration prototypes
-void value_Print(Value *value);
+void value_Print(FILE *out, Value *value);
 Value *value_Eval(Environment *env, Value *value);
 void value_Delete(Value *value);
 Value *value_Error(char *fmt, ...);
@@ -362,65 +362,65 @@ value_Delete(Value *value)
 }
 
 void
-value_PrintExpr(Value *value, char open, char close)
+value_PrintExpr(FILE *out, Value *value, char *open, char *close)
 {
-    putchar(open);
+    fprintf(out, "%s", open);
     for (int i = 0; i < value->count; i++) {
-        value_Print(value->cell[i]);
+        value_Print(out, value->cell[i]);
         if (i != (value->count - 1)) {
-            putchar(' ');
+            fprintf(out, " ");
         }
     }
-    putchar(close);
+    fprintf(out, "%s", close);
 }
 
 void
-value_Print(Value *value)
+value_Print(FILE* out, Value *value)
 {
     switch (value->type) {
         case CoolValue_Integer:
-            printf("%li", value->number);
+            fprintf(out, "%li", value->number);
             break;
         case CoolValue_Double:
-            printf("%f", value->fpnumber);
+            fprintf(out, "%f", value->fpnumber);
             break;
         case CoolValue_Byte:
-            printf("%x", (uint8_t) value->number);
+            fprintf(out, "%x", (uint8_t) value->number);
             break;
         case CoolValue_String:
-            printf("'%s'", value->string);
+            fprintf(out, "'%s'", value->string);
             break;
         case CoolValue_Error:
-            printf("Error: %s", value->errorString);
+            fprintf(out, "Error: %s", value->errorString);
             break;
         case CoolValue_Symbol:
-            printf("%s", value->symbolString);
+            fprintf(out, "%s", value->symbolString);
             break;
         case CoolValue_Sexpr:
-            value_PrintExpr(value, '(', ')');
+            value_PrintExpr(out, value, "(", ")");
             break;
         case CoolValue_Qexpr:
-            value_PrintExpr(value, '{', '}');
+            value_PrintExpr(out, value, "{", "}");
             break;
         case CoolValue_Function:
             if (value->builtin != NULL) {
-                printf("<builtin>");
+                fprintf(out, "<builtin>");
             } else {
-                printf("(\\ ");
-                value_Print(value->formals);
-                printf(" ");
-                value_Print(value->body);
-                printf(" ");
+                fprintf(out, "(\\ ");
+                value_Print(out, value->formals);
+                fprintf(out, " ");
+                value_Print(out, value->body);
+                fprintf(out, " ");
             }
             break;
     }
 }
 
 void
-value_Println(Value *value)
+value_Println(FILE *out, Value *value)
 {
-    value_Print(value);
-    putchar('\n');
+    value_Print(out, value);
+    fprintf(out, "\n");
 }
 
 Value *
@@ -690,9 +690,6 @@ builtin_Var(Environment *env, Value *val, char *function)
     CASSERT(val, val->cell[0]->type == CoolValue_Qexpr, "Function 'def' passed incorrect type, got %s", value_TypeString(val->cell[0]->type));
 
     Value *symbols = val->cell[0];
-
-    // value_Println(val);
-    // value_Println(symbols);
 
     for (int i = 0; i < symbols->count; i++) {
         CASSERT(val, symbols->cell[i]->type == CoolValue_Symbol, "Function 'def' cannot define a non-symbol, got %s", value_TypeString(symbols->cell[i]->type));
@@ -1070,7 +1067,7 @@ builtin_Load(Environment *env, Value *x)
             Value *top = value_Pop(expr, 0);
             Value *y = value_Eval(env, top);
             if (y->type == CoolValue_Error) {
-                value_Println(y);
+                value_Println(stdout, y);
             }
             value_Delete(y);
         }
@@ -1095,10 +1092,10 @@ Value *
 builtin_Print(Environment *env, Value *x)
 {
     for (int i = 0; i < x->count; i++) {
-        value_Print(x->cell[i]);
-        putchar(' ');
+        value_Print(stdout, x->cell[i]);
+        fprintf(stdout, " ");
     }
-    putchar('\n');
+    fprintf(stdout, "\n");
     value_Delete(x);
 
     return value_SExpr();

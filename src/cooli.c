@@ -47,7 +47,7 @@ main(int argc, char** argv)
             Value *args = value_AddCell(value_SExpr(), value_String(argv[i]));
             Value *x = builtin_Load(env, args);
             if (value_GetType(x) == CoolValue_Error) {
-                value_Println(x);
+                value_Println(stdout, x);
             }
             value_Delete(x);
         }
@@ -60,9 +60,9 @@ main(int argc, char** argv)
         mpc_result_t r;
         if (mpc_parse("<stdin>", input, Cool, &r)) {
             Value *input = value_Read(r.output);
-            value_Println(input);
+            value_Println(stdout, input);
             Value *x = value_Eval(env, input);
-            value_Println(x);
+            value_Println(stdout, x);
             value_Delete(x);
             mpc_ast_delete(r.output);
         } else {

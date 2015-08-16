@@ -44,7 +44,7 @@ Value *value_AddCell(Value *value, Value *x);
 Value *value_String(char *str);
 Value *value_SExpr();
 Value *builtin_Load(Environment *env, Value *x);
-void value_Println(Value *value);
+void value_Println(FILE *out, Value *value);
 void value_Delete(Value *value);
 void environment_Delete(Environment *env);
 Value *value_Eval(Environment *env, Value *value);
