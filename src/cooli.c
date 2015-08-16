@@ -3,8 +3,8 @@
 #include "mpc.h"
 #include "cool.h"
 
-int 
-main(int argc, char** argv) 
+int
+main(int argc, char** argv)
 {
     Number = mpc_new("number");
     Symbol = mpc_new("symbol");
@@ -18,7 +18,7 @@ main(int argc, char** argv)
     mpca_lang(MPCA_LANG_DEFAULT,
         "   \
             number  : /[+-]?[0-9]+[.]?[0-9]*/ ; \
-            symbol  : /[a-zA-Z_+\\-*\\/\\\\=<>!&][a-zA-Z0-9_+\\-*\\/\\\\=<>!&]*/ ; \
+            symbol  : /[a-zA-Z_+^\\-*\\/\\\\=<>!&][a-zA-Z0-9_+^\\-*\\/\\\\=<>!&]*/ ; \
             string  : /\"(\\\\.|[^\"])*\"/ ;                    \
             comment : /;[^\\r\\n]*/ ;                           \
             sexpr   : '(' <expr>* ')' ;                         \
@@ -28,11 +28,11 @@ main(int argc, char** argv)
             cool    : /^/ <expr>* /$/ ;                         \
         ",
         Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
-    
+
     // Old number regex
     // number  : /-?[0-9]+/ ;
     // ^[-+]?[0-9]+\.[0-9]+$
-    // float   : /<number>('.'[0-9]+)?/ ; 
+    // float   : /<number>('.'[0-9]+)?/ ;
 
     printf("COOL version 0.0.0.1\n");
     printf("Press ctrl+c to exit\n");
@@ -72,7 +72,7 @@ main(int argc, char** argv)
 
         free(input);
     }
-    
+
     environment_Delete(env);
 
     mpc_cleanup(8, Number, Symbol, String, Comment, Sexpr, Qexpr, Expr, Cool);
