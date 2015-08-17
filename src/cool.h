@@ -1,6 +1,7 @@
 #ifndef COOL_H_
 #define COOL_H_
 
+#include <gmp.h>
 #include "mpc.h"
 
 struct cenv;

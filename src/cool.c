@@ -14,6 +14,7 @@ struct cval {
         double fpnumber;
         uint8_t byte;
     };
+    mpz_t bignumber;
 
     char *errorString;
     char *symbolString;
@@ -484,9 +485,15 @@ value_AddCell(Value *value, Value *x)
 Value *
 value_ReadInteger(mpc_ast_t* t)
 {
-    errno = 0;
+    Value *val = value_Integer(0);
+
+    mpz_init_set_str(val->bignumber, t->contents, 10); // assumes decimal notation
+
+    // legacy
     long x = strtol(t->contents, NULL, 10);
-    return errno != ERANGE ? value_Integer(x) : value_Error("invalid number");
+    val->number = x;
+
+    return val;
 }
 
 Value *
