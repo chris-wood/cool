@@ -82,7 +82,6 @@ static void test_value_builtin_add(void **state) {
     long y = 10;
     Value *yv = value_Integer(y);
     
-    // TODO: this probably should not be hardcoded, but pulled from cool.c macro
     Value *op = value_Symbol("+");
     value_AddCell(op, xv);
     value_AddCell(op, yv);
@@ -96,23 +95,93 @@ static void test_value_builtin_add(void **state) {
 }
 
 static void test_value_builtin_sub(void **state) {
-    // pass
+    long x = 5;
+    Value *xv = value_Integer(x);
+    long y = 10;
+    Value *yv = value_Integer(y);
+    
+    Value *op = value_Symbol("-");
+    value_AddCell(op, xv);
+    value_AddCell(op, yv);
+
+    Environment *env = environment_Create();
+    Value *zv = builtin_sub(env, op);
+    
+    assert_true(zv->number == -5);
+
+    value_Delete(zv);
 }
 
-static void test_value_builtin_mult(void **state) {
-    // pass
+static void test_value_builtin_mul(void **state) {
+    long x = 5;
+    Value *xv = value_Integer(x);
+    long y = 10;
+    Value *yv = value_Integer(y);
+    
+    Value *op = value_Symbol("*");
+    value_AddCell(op, xv);
+    value_AddCell(op, yv);
+
+    Environment *env = environment_Create();
+    Value *zv = builtin_mul(env, op);
+    
+    assert_true(zv->number == 50);
+
+    value_Delete(zv);
 }
 
 static void test_value_builtin_div(void **state) {
-    // pass
+    long x = 10;
+    Value *xv = value_Integer(x);
+    long y = 5;
+    Value *yv = value_Integer(y);
+    
+    Value *op = value_Symbol("/");
+    value_AddCell(op, xv);
+    value_AddCell(op, yv);
+
+    Environment *env = environment_Create();
+    Value *zv = builtin_div(env, op);
+    
+    assert_true(zv->number == 2);
+
+    value_Delete(zv);
 }
 
 static void test_value_builtin_xor(void **state) {
-    // pass
+    long x = 0xFFFF1111;
+    Value *xv = value_Integer(x);
+    long y = 0xFFFF1111;
+    Value *yv = value_Integer(y);
+    
+    Value *op = value_Symbol("^");
+    value_AddCell(op, xv);
+    value_AddCell(op, yv);
+
+    Environment *env = environment_Create();
+    Value *zv = builtin_xor(env, op);
+    
+    assert_true(zv->number == 0);
+
+    value_Delete(zv);
 }
 
 static void test_value_builtin_exp(void **state) {
-    // pass
+    long x = 2;
+    Value *xv = value_Integer(x);
+    long y = 6;
+    Value *yv = value_Integer(y);
+    
+    Value *op = value_Symbol("**");
+    value_AddCell(op, xv);
+    value_AddCell(op, yv);
+
+    Environment *env = environment_Create();
+    Value *zv = builtin_exp(env, op);
+    
+    assert_true(zv->number == 64);
+
+    value_Delete(zv);
 }
 
 int
@@ -127,7 +196,7 @@ main(int argc, char **argv)
         cmocka_unit_test(test_value_Error),
         cmocka_unit_test(test_value_builtin_add),
         cmocka_unit_test(test_value_builtin_sub),
-        cmocka_unit_test(test_value_builtin_mult),
+        cmocka_unit_test(test_value_builtin_mul),
         cmocka_unit_test(test_value_builtin_div),
         cmocka_unit_test(test_value_builtin_xor),
         cmocka_unit_test(test_value_builtin_exp)
