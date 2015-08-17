@@ -77,7 +77,22 @@ static void test_value_Error(void **state) {
 }
 
 static void test_value_builtin_add(void **state) {
-    // pass
+    long x = 5;
+    Value *xv = value_Integer(x);
+    long y = 10;
+    Value *yv = value_Integer(y);
+    
+    // TODO: this probably should not be hardcoded, but pulled from cool.c macro
+    Value *op = value_Symbol("+");
+    value_AddCell(op, xv);
+    value_AddCell(op, yv);
+
+    Environment *env = environment_Create();
+    Value *zv = builtin_add(env, op);
+    
+    assert_true(zv->number == 15);
+
+    value_Delete(zv);
 }
 
 static void test_value_builtin_sub(void **state) {
