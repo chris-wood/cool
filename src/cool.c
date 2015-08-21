@@ -873,16 +873,12 @@ builtin_IntegerOrder(Environment *env, Value *x, char *operator)
     int ret = 0;
 
     if (strcmp(operator, ">") == 0) {
-        // ret = (x->cell[0]->number > x->cell[1]->number);
         ret = mpz_cmp(x->cell[0]->bignumber, x->cell[1]->bignumber) > 0 ? 1 : -1;
     } else if (strcmp(operator, "<") == 0) {
-        // ret = (x->cell[0]->number < x->cell[1]->number);
         ret = mpz_cmp(x->cell[0]->bignumber, x->cell[1]->bignumber) < 0 ? 1 : -1;
     } else if (strcmp(operator, ">=") == 0) {
-        // ret = (x->cell[0]->number >= x->cell[1]->number);
         ret = mpz_cmp(x->cell[0]->bignumber, x->cell[1]->bignumber) >= 0 ? 1 : -1;
     } else if (strcmp(operator, "<=") == 0) {
-        // ret = (x->cell[0]->number <= x->cell[1]->number);
         ret = mpz_cmp(x->cell[0]->bignumber, x->cell[1]->bignumber) <= 0 ? 1 : -1;
     } else {
         value_Delete(x);
@@ -973,7 +969,6 @@ builtin_If(Environment *env, Value *x)
     x->cell[1]->type = CoolValue_Sexpr;
     x->cell[2]->type = CoolValue_Sexpr;
 
-    // if (x->cell[0]->number > 0) {
     if (mpz_sgn(x->cell[0]->bignumber) > 0) {
         y = value_Eval(env, value_Pop(x, 1));
     } else {
@@ -994,33 +989,26 @@ builtin_Operator(Environment *env, Value *expr, char* op)
         }
     }
 
-    // http://web.mit.edu/gnu/doc/html/gmp_4.html
-
     Value *x = value_Pop(expr, 0);
     if ((strcmp(op, "-") == 0) && expr->count == 0) {
         mpz_t zero;
         mpz_init(zero);
         mpz_add_ui(zero, zero, 0);
         mpz_sub(x->bignumber, zero, x->bignumber);
-        // x->number = -x->number;
     }
 
     while (expr->count > 0) {
         Value *y = value_Pop(expr, 0);
         if (strcmp(op, "+") == 0) {
-            // x->number += y->number;
             mpz_add(x->bignumber, x->bignumber, y->bignumber);
         }
         if (strcmp(op, "-") == 0) {
-            // x->number -= y->number;
             mpz_sub(x->bignumber, x->bignumber, y->bignumber);
         }
         if (strcmp(op, "*") == 0) {
-            // x->number *= y->number;
             mpz_mul(x->bignumber, x->bignumber, y->bignumber);
         }
         if (strcmp(op, "/") == 0) {
-            // if (y->number == 0) {
             if (mpz_sgn(y->bignumber) == 0) {
                 value_Delete(x);
                 value_Delete(y);
@@ -1028,7 +1016,6 @@ builtin_Operator(Environment *env, Value *expr, char* op)
                 break;
             }
             mpz_div(x->bignumber, x->bignumber, y->bignumber);
-            // x->number /= y->number;
         }
 
         // TODO: AND mpz_and
@@ -1038,11 +1025,9 @@ builtin_Operator(Environment *env, Value *expr, char* op)
         // TODO: FLIPBIT mpz_combit
 
         if (strcmp(op, "^") == 0) {
-            // x->number ^= y->number;
             mpz_xor(x->bignumber, x->bignumber, y->bignumber);
         }
         if (strcmp(op, "**") == 0) {
-            // x->number = (long) pow((double) x->number, (double) y->number);
             mpz_pow_ui(x->bignumber, x->bignumber, mpz_get_ui(y->bignumber));
         }
         value_Delete(y);
