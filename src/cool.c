@@ -10,11 +10,10 @@ typedef Value *(*cbuiltin)(Environment *, Value *);
 struct cval {
     uint8_t type;
     union {
-        size_t number;
         double fpnumber;
         uint8_t byte;
+        mpz_t bignumber;
     };
-    mpz_t bignumber;
 
     char *errorString;
     char *symbolString;
@@ -164,7 +163,12 @@ value_Integer(size_t x)
 {
     Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Integer;
-    value->number = x;
+
+    char *string;
+    asprintf(&string, "%li", x);
+    mpz_init_set_str(value->bignumber, string, 10); // assumes decimal notation
+    free(string);
+
     return value;
 }
 
@@ -182,7 +186,7 @@ value_Byte(uint8_t x)
 {
     Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Byte;
-    value->number = (long) x;
+    value->byte = (long) x;
     return value;
 }
 
@@ -331,6 +335,7 @@ value_Delete(Value *value)
 {
     switch (value->type) {
         case CoolValue_Integer:
+            mpz_clear(value->bignumber);
         case CoolValue_Double:
         case CoolValue_Byte:
             break;
@@ -379,14 +384,17 @@ void
 value_Print(FILE* out, Value *value)
 {
     switch (value->type) {
-        case CoolValue_Integer:
-            fprintf(out, "%li", value->number);
+        case CoolValue_Integer: {
+            char *repr = mpz_get_str(NULL, 10, value->bignumber);
+            fprintf(out, "%s", repr);
+            free(repr);
             break;
+        }
         case CoolValue_Double:
             fprintf(out, "%f", value->fpnumber);
             break;
         case CoolValue_Byte:
-            fprintf(out, "%x", (uint8_t) value->number);
+            fprintf(out, "%x", value->byte);
             break;
         case CoolValue_String:
             fprintf(out, "'%s'", value->string);
@@ -442,8 +450,10 @@ value_Copy(Value *in)
             }
             break;
         case CoolValue_Integer:
+            mpz_init(copy->bignumber);
+            mpz_set(&(copy->bignumber), &(in->bignumber));
         case CoolValue_Byte:
-            copy->number = in->number;
+            copy->byte = in->byte;
             break;
         case CoolValue_Double:
             copy->fpnumber = in->fpnumber;
@@ -488,10 +498,6 @@ value_ReadInteger(mpc_ast_t* t)
     Value *val = value_Integer(0);
 
     mpz_init_set_str(val->bignumber, t->contents, 10); // assumes decimal notation
-
-    // legacy
-    long x = strtol(t->contents, NULL, 10);
-    val->number = x;
 
     return val;
 }
@@ -866,6 +872,7 @@ Value *
 builtin_IntegerOrder(Environment *env, Value *x, char *operator)
 {
     int ret = 0;
+
     if (strcmp(operator, ">") == 0) {
         ret = (x->cell[0]->number > x->cell[1]->number);
     } else if (strcmp(operator, "<") == 0) {
@@ -983,9 +990,11 @@ builtin_Operator(Environment *env, Value *expr, char* op)
         }
     }
 
-    Value *x = value_Pop(expr, 0);
+    // http://web.mit.edu/gnu/doc/html/gmp_4.html
 
+    Value *x = value_Pop(expr, 0);
     if ((strcmp(op, "-") == 0) && expr->count == 0) {
+        // TODO
         x->number = -x->number;
     }
 
