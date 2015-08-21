@@ -164,10 +164,8 @@ value_Integer(size_t x)
     Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Integer;
 
-    char *string;
-    asprintf(&string, "%li", x);
-    mpz_init_set_str(value->bignumber, string, 10); // assumes decimal notation
-    free(string);
+    mpz_init(value->bignumber);
+    mpz_set_ui(value->bignumber, x);
 
     return value;
 }
@@ -336,6 +334,7 @@ value_Delete(Value *value)
     switch (value->type) {
         case CoolValue_Integer:
             mpz_clear(value->bignumber);
+            break;
         case CoolValue_Double:
         case CoolValue_Byte:
             break;
@@ -385,9 +384,10 @@ value_Print(FILE* out, Value *value)
 {
     switch (value->type) {
         case CoolValue_Integer: {
-            char *repr = mpz_get_str(NULL, 10, value->bignumber);
-            fprintf(out, "%s", repr);
-            free(repr);
+            mpz_out_str(out,10,value->bignumber);
+            // char *repr = mpz_get_str(NULL, 10, value->bignumber);
+            // fprintf(out, "%s", repr);
+            // free(repr);
             break;
         }
         case CoolValue_Double:
@@ -451,7 +451,7 @@ value_Copy(Value *in)
             break;
         case CoolValue_Integer:
             mpz_init(copy->bignumber);
-            mpz_set(&(copy->bignumber), &(in->bignumber));
+            mpz_set(copy->bignumber, in->bignumber);
         case CoolValue_Byte:
             copy->byte = in->byte;
             break;
@@ -496,9 +496,7 @@ Value *
 value_ReadInteger(mpc_ast_t* t)
 {
     Value *val = value_Integer(0);
-
     mpz_init_set_str(val->bignumber, t->contents, 10); // assumes decimal notation
-
     return val;
 }
 
@@ -814,8 +812,9 @@ value_Equal(Value *x, Value *y)
 
     switch (x->type) {
         case CoolValue_Integer:
+            return mpz_cmp(x->bignumber, y->bignumber) == 0;
         case CoolValue_Byte:
-            return x->number == y->number;
+            return x->byte == y->byte;
         case CoolValue_Double:
             return x->fpnumber == y->fpnumber;
         case CoolValue_String:
@@ -874,13 +873,17 @@ builtin_IntegerOrder(Environment *env, Value *x, char *operator)
     int ret = 0;
 
     if (strcmp(operator, ">") == 0) {
-        ret = (x->cell[0]->number > x->cell[1]->number);
+        // ret = (x->cell[0]->number > x->cell[1]->number);
+        ret = mpz_cmp(x->cell[0]->bignumber, x->cell[1]->bignumber) > 0 ? 1 : -1;
     } else if (strcmp(operator, "<") == 0) {
-        ret = (x->cell[0]->number < x->cell[1]->number);
+        // ret = (x->cell[0]->number < x->cell[1]->number);
+        ret = mpz_cmp(x->cell[0]->bignumber, x->cell[1]->bignumber) < 0 ? 1 : -1;
     } else if (strcmp(operator, ">=") == 0) {
-        ret = (x->cell[0]->number >= x->cell[1]->number);
+        // ret = (x->cell[0]->number >= x->cell[1]->number);
+        ret = mpz_cmp(x->cell[0]->bignumber, x->cell[1]->bignumber) >= 0 ? 1 : -1;
     } else if (strcmp(operator, "<=") == 0) {
-        ret = (x->cell[0]->number <= x->cell[1]->number);
+        // ret = (x->cell[0]->number <= x->cell[1]->number);
+        ret = mpz_cmp(x->cell[0]->bignumber, x->cell[1]->bignumber) <= 0 ? 1 : -1;
     } else {
         value_Delete(x);
         return value_Error("Error: unexpected operator in 'builtin_Order': %s", operator);
@@ -970,7 +973,8 @@ builtin_If(Environment *env, Value *x)
     x->cell[1]->type = CoolValue_Sexpr;
     x->cell[2]->type = CoolValue_Sexpr;
 
-    if (x->cell[0]->number > 0) {
+    // if (x->cell[0]->number > 0) {
+    if (mpz_sgn(x->cell[0]->bignumber) > 0) {
         y = value_Eval(env, value_Pop(x, 1));
     } else {
         y = value_Eval(env, value_Pop(x, 2));
@@ -994,35 +998,52 @@ builtin_Operator(Environment *env, Value *expr, char* op)
 
     Value *x = value_Pop(expr, 0);
     if ((strcmp(op, "-") == 0) && expr->count == 0) {
-        // TODO
-        x->number = -x->number;
+        mpz_t zero;
+        mpz_init(zero);
+        mpz_add_ui(zero, zero, 0);
+        mpz_sub(x->bignumber, zero, x->bignumber);
+        // x->number = -x->number;
     }
 
     while (expr->count > 0) {
         Value *y = value_Pop(expr, 0);
         if (strcmp(op, "+") == 0) {
-            x->number += y->number;
+            // x->number += y->number;
+            mpz_add(x->bignumber, x->bignumber, y->bignumber);
         }
         if (strcmp(op, "-") == 0) {
-            x->number -= y->number;
+            // x->number -= y->number;
+            mpz_sub(x->bignumber, x->bignumber, y->bignumber);
         }
         if (strcmp(op, "*") == 0) {
-            x->number *= y->number;
+            // x->number *= y->number;
+            mpz_mul(x->bignumber, x->bignumber, y->bignumber);
         }
         if (strcmp(op, "/") == 0) {
-            if (y->number == 0) {
+            // if (y->number == 0) {
+            if (mpz_sgn(y->bignumber) == 0) {
                 value_Delete(x);
                 value_Delete(y);
                 x = value_Error("Division by zero.");
                 break;
             }
-            x->number /= y->number;
+            mpz_div(x->bignumber, x->bignumber, y->bignumber);
+            // x->number /= y->number;
         }
+
+        // TODO: AND mpz_and
+        // TODO: SETBIT mpz_setbit
+        // TODO: CLRBIT mpz_clrbit
+        // TODO: TSTBIT mpz_tstbit
+        // TODO: FLIPBIT mpz_combit
+
         if (strcmp(op, "^") == 0) {
-            x->number ^= y->number;
+            // x->number ^= y->number;
+            mpz_xor(x->bignumber, x->bignumber, y->bignumber);
         }
         if (strcmp(op, "**") == 0) {
-            x->number = (long) pow((double) x->number, (double) y->number);
+            // x->number = (long) pow((double) x->number, (double) y->number);
+            mpz_pow_ui(x->bignumber, x->bignumber, mpz_get_ui(y->bignumber));
         }
         value_Delete(y);
     }
