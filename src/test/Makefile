@@ -1,6 +1,6 @@
 CC=gcc
 CFLAGS=-std=c99 -Wall
-LIBRARIES=-ledit -lm -lcmocka
+LIBRARIES=-ledit -lm -lcmocka -lgmp
 
 all: test_cool_value test_cool_environment
 

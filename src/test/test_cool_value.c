@@ -5,13 +5,18 @@
 
 #include "../cool.c"
 #include "../mpc.h"
+#include <gmp.h>
 
 static void test_value_Integer(void **state) {
     long input = 10;
     Value *value = value_Integer(input);
 
+    mpz_t inputVal;
+    mpz_init(inputVal);
+    mpz_set_ui(inputVal, input);
+
     assert_true(value->type == CoolValue_Integer);
-    assert_true(value->number == input);
+    assert_true(mpz_cmp(value->bignumber, inputVal) == 0);
     assert_true(value->cell == NULL);
 
     value_Delete(value);
@@ -81,15 +86,19 @@ static void test_value_builtin_add(void **state) {
     Value *xv = value_Integer(x);
     long y = 10;
     Value *yv = value_Integer(y);
-    
+
     Value *op = value_Symbol("+");
     value_AddCell(op, xv);
     value_AddCell(op, yv);
 
     Environment *env = environment_Create();
     Value *zv = builtin_add(env, op);
-    
-    assert_true(zv->number == 15);
+
+    mpz_t result;
+    mpz_init(result);
+    mpz_set_si(result, 15);
+
+    assert_true(mpz_cmp(zv->bignumber, result) == 0);
 
     value_Delete(zv);
 }
@@ -99,15 +108,19 @@ static void test_value_builtin_sub(void **state) {
     Value *xv = value_Integer(x);
     long y = 10;
     Value *yv = value_Integer(y);
-    
+
     Value *op = value_Symbol("-");
     value_AddCell(op, xv);
     value_AddCell(op, yv);
 
     Environment *env = environment_Create();
     Value *zv = builtin_sub(env, op);
-    
-    assert_true(zv->number == -5);
+
+    mpz_t result;
+    mpz_init(result);
+    mpz_set_si(result, -5);
+
+    assert_true(mpz_cmp(zv->bignumber, result) == 0);
 
     value_Delete(zv);
 }
@@ -117,15 +130,19 @@ static void test_value_builtin_mul(void **state) {
     Value *xv = value_Integer(x);
     long y = 10;
     Value *yv = value_Integer(y);
-    
+
     Value *op = value_Symbol("*");
     value_AddCell(op, xv);
     value_AddCell(op, yv);
 
     Environment *env = environment_Create();
     Value *zv = builtin_mul(env, op);
-    
-    assert_true(zv->number == 50);
+
+    mpz_t result;
+    mpz_init(result);
+    mpz_set_si(result, 50);
+
+    assert_true(mpz_cmp(zv->bignumber, result) == 0);
 
     value_Delete(zv);
 }
@@ -135,15 +152,19 @@ static void test_value_builtin_div(void **state) {
     Value *xv = value_Integer(x);
     long y = 5;
     Value *yv = value_Integer(y);
-    
+
     Value *op = value_Symbol("/");
     value_AddCell(op, xv);
     value_AddCell(op, yv);
 
     Environment *env = environment_Create();
     Value *zv = builtin_div(env, op);
-    
-    assert_true(zv->number == 2);
+
+    mpz_t result;
+    mpz_init(result);
+    mpz_set_si(result, 2);
+
+    assert_true(mpz_cmp(zv->bignumber, result) == 0);
 
     value_Delete(zv);
 }
@@ -153,15 +174,19 @@ static void test_value_builtin_xor(void **state) {
     Value *xv = value_Integer(x);
     long y = 0xFFFF1111;
     Value *yv = value_Integer(y);
-    
+
     Value *op = value_Symbol("^");
     value_AddCell(op, xv);
     value_AddCell(op, yv);
 
     Environment *env = environment_Create();
     Value *zv = builtin_xor(env, op);
-    
-    assert_true(zv->number == 0);
+
+    mpz_t result;
+    mpz_init(result);
+    mpz_set_si(result, 0);
+
+    assert_true(mpz_cmp(zv->bignumber, result) == 0);
 
     value_Delete(zv);
 }
@@ -171,17 +196,33 @@ static void test_value_builtin_exp(void **state) {
     Value *xv = value_Integer(x);
     long y = 6;
     Value *yv = value_Integer(y);
-    
+
     Value *op = value_Symbol("**");
     value_AddCell(op, xv);
     value_AddCell(op, yv);
 
     Environment *env = environment_Create();
     Value *zv = builtin_exp(env, op);
-    
-    assert_true(zv->number == 64);
+
+    mpz_t result;
+    mpz_init(result);
+    mpz_set_si(result, 64);
+
+    assert_true(mpz_cmp(zv->bignumber, result) == 0);
 
     value_Delete(zv);
+}
+
+static void test_value_builtin_Head(void **state) {
+    // TODO: force creation of a list
+}
+
+static void test_value_builtin_Tail(void **state) {
+
+}
+
+static void test_value_builtin_List(void **state) {
+
 }
 
 int
@@ -199,7 +240,10 @@ main(int argc, char **argv)
         cmocka_unit_test(test_value_builtin_mul),
         cmocka_unit_test(test_value_builtin_div),
         cmocka_unit_test(test_value_builtin_xor),
-        cmocka_unit_test(test_value_builtin_exp)
+        cmocka_unit_test(test_value_builtin_exp),
+        cmocka_unit_test(test_value_builtin_Head),
+        cmocka_unit_test(test_value_builtin_Tail),
+        cmocka_unit_test(test_value_builtin_List)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);
