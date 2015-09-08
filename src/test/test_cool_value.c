@@ -214,16 +214,93 @@ static void test_value_builtin_exp(void **state) {
 }
 
 static void test_value_builtin_Head(void **state) {
-    // TODO: force creation of a list
+    Value *list = value_QExpr();
+    Value *func = value_Symbol("head");
+
+    long input = 10;
+    Value *l1 = value_Integer(input);
+    Value *l2 = value_Integer(input + 1);
+    Value *l3 = value_Integer(input + 2);
+
+    value_AddCell(list, l1);
+    value_AddCell(list, l2);
+    value_AddCell(list, l3);
+
+    value_AddCell(func, list);
+
+    Environment *env = environment_Create();
+    Value *head = builtin_Head(env, func);
+
+    Value *expectedValue = value_Integer(input);
+    Value *expected = value_QExpr();
+    value_AddCell(expected, expectedValue);
+
+    assert_true(value_Equal(expected, head));
 }
 
 static void test_value_builtin_Tail(void **state) {
+    Value *list = value_QExpr();
+    Value *func = value_Symbol("head");
 
+    long input = 10;
+    Value *l1 = value_Integer(input);
+    Value *l2 = value_Integer(input + 1);
+    Value *l3 = value_Integer(input + 2);
+
+    value_AddCell(list, l1);
+    value_AddCell(list, l2);
+    value_AddCell(list, l3);
+
+    value_AddCell(func, list);
+
+    Environment *env = environment_Create();
+    Value *tail = builtin_Tail(env, func);
+
+    Value *expectedValue1 = value_Integer(input + 1);
+    Value *expectedValue2 = value_Integer(input + 2);
+    Value *expected = value_QExpr();
+    value_AddCell(expected, expectedValue1);
+    value_AddCell(expected, expectedValue2);
+
+    assert_true(value_Equal(expected, tail));
 }
 
 static void test_value_builtin_List(void **state) {
 
 }
+
+static void test_value_builtin_Compare(void **state) {
+    char *symbol = "==";
+    Value *func = value_Symbol(symbol);
+
+    long input = 10;
+    Value *l1 = value_Integer(input);
+    Value *l2 = value_Integer(input + 1);
+
+    value_AddCell(func, l1);
+    value_AddCell(func, l2);
+
+    Environment *env = environment_Create();
+
+    Value *result = builtin_Compare(env, func, symbol);
+    // values are not equal, so the result will be 0
+
+    assert_true(result->type == CoolValue_Integer);
+    assert_true(mpz_cmp_ui(result->bignumber, 0) == 0);
+}
+
+static void test_value_builtin_Equal(void **state) {
+
+}
+
+static void test_value_builtin_NotEqual(void **state) {
+
+}
+
+static void test_value_builtin_If(void **state) {
+
+}
+
 
 int
 main(int argc, char **argv)
@@ -243,7 +320,11 @@ main(int argc, char **argv)
         cmocka_unit_test(test_value_builtin_exp),
         cmocka_unit_test(test_value_builtin_Head),
         cmocka_unit_test(test_value_builtin_Tail),
-        cmocka_unit_test(test_value_builtin_List)
+        cmocka_unit_test(test_value_builtin_List),
+        cmocka_unit_test(test_value_builtin_Compare),
+        cmocka_unit_test(test_value_builtin_Equal),
+        cmocka_unit_test(test_value_builtin_NotEqual),
+        cmocka_unit_test(test_value_builtin_If)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

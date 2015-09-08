@@ -12,4 +12,3 @@ rm *.tmp
 
 # remove the library
 rm cool.so
-

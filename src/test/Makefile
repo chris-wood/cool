@@ -1,13 +1,23 @@
 CC=gcc
-CFLAGS=-std=c99 -Wall
+CFLAGS=-std=c99 -Wall -ftest-coverage -fprofile-arcs
 LIBRARIES=-ledit -lm -lcmocka -lgmp
 
-all: test_cool_value test_cool_environment
+BINARIES=test_cool_value test_cool_environment
+
+all: $(BINARIES)
 
 test_cool_value: test_cool_value.c
-	$(CC) $(CFLAGS) test_cool_value.c ../cool.so -o test_cool_value $(LIBRARIES) 
+	$(CC) $(CFLAGS) test_cool_value.c ../cool.so -o test_cool_value $(LIBRARIES)
 
 test_cool_environment: test_cool_environment.c
-	$(CC) $(CFLAGS) test_cool_environment.c ../cool.so -o test_cool_environment $(LIBRARIES) 	
+	$(CC) $(CFLAGS) test_cool_environment.c ../cool.so -o test_cool_environment $(LIBRARIES)
 
+check:
+	./check.sh
 
+coverage:
+	./check.sh
+	./coverage.sh
+
+clean:
+	rm -rf $(BINARIES)

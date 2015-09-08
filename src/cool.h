@@ -3,30 +3,7 @@
 
 #include <gmp.h>
 #include "mpc.h"
-
-struct cenv;
-struct cval;
-typedef struct cenv Environment;
-typedef struct cval Value;
-
-typedef enum {
-    CoolValueError_DivideByZero,
-    CoolValueError_BadOperator,
-    CoolValueError_BadNumber
-} CoolValueError;
-
-// Primitive types
-typedef enum {
-    CoolValue_Integer = 1,
-    CoolValue_Double,
-    CoolValue_Byte,
-    CoolValue_String,
-    CoolValue_Symbol,
-    CoolValue_Sexpr,
-    CoolValue_Qexpr,
-    CoolValue_Function,
-    CoolValue_Error
-} CoolValue;
+#include "cool_types.h"
 
 // Parsing grammars
 mpc_parser_t* Number;

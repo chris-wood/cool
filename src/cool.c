@@ -1,4 +1,9 @@
 #include <stdio.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <sys/resource.h>
+#include <pthread.h>
+#include <assert.h>
 
 #include "cool.h"
 
@@ -25,7 +30,7 @@ struct cval {
     Value *body;
 
     int count;
-    struct cval ** cell;
+    struct cval **cell;
     int error;
 };
 
@@ -36,8 +41,15 @@ struct cenv {
     struct cval **values;
 };
 
+// Wrapper for coroutines (from _Run builtin)
+typedef struct {
+    Environment *env;
+    Value *param;
+} EvaluateWrapper;
+
 // Forward declaration prototypes
 void value_Print(FILE *out, Value *value);
+void value_Println(FILE *out, Value *value);
 Value *value_Eval(Environment *env, Value *value);
 void value_Delete(Value *value);
 Value *value_Error(char *fmt, ...);
@@ -45,6 +57,7 @@ Value *value_Copy(Value *in);
 char *value_TypeString(int type);
 Value *builtin_Eval(Environment *env, Value *x);
 Value *builtin_List(Environment *env, Value *x);
+Value *value_EvaluateExpression(Environment *env, Value *value);
 
 #define CASSERT(args, cond, fmt, ...) \
     if (!(cond)) { \
@@ -294,12 +307,12 @@ value_Error(char *fmt, ...)
 }
 
 Value *
-value_ReadContent(char *fileName)
+value_ReadContent(char *contentName)
 {
-    FILE *fp = fopen(fileName, "r");
+    FILE *fp = fopen(contentName, "r");
     if (fp == NULL) {
         // TODO: insert interest issuance here
-        return value_Error("Unable to open file %s", fileName);
+        return value_Error("Unable to open file %s", contentName);
     } else {
         Value *value = value_SExpr();
         char fileBuffer[FILE_BLOCK_SIZE]; // read in FILE_BLOCK_SIZE-byte blocks
@@ -327,6 +340,42 @@ value_ReadContent(char *fileName)
         return value;
     }
 }
+
+Value *
+value_WriteContent(char *contentName, Value *data)
+{
+    FILE *fp = fopen(contentName, "w");
+    if (fp == NULL) {
+        // TODO: insert interest issuance here
+        return value_Error("Unable to open file %s", contentName);
+    } else {
+        Value *value = value_SExpr();
+        char fileBuffer[FILE_BLOCK_SIZE];
+        size_t numBytesRead = 0;
+        for (;;) {
+            numBytesRead = fread(fileBuffer, 1, FILE_BLOCK_SIZE, fp);
+
+            // Copy fileBuffer bytes to the value list
+            int start = value->count;
+
+            value->count += numBytesRead;
+            value->cell = realloc(value->cell, sizeof(Value *) * value->count);
+
+            for (int i = 0; i < numBytesRead; i++) {
+                int index = start + i;
+                value->cell[index] = value_Byte(fileBuffer[i]);
+            }
+
+            // Reset the file buffer (to zeros) and check to see if we're done
+            memset(fileBuffer, 0, FILE_BLOCK_SIZE);
+            if (numBytesRead != FILE_BLOCK_SIZE) {
+                break;
+            }
+        }
+        return value;
+    }
+}
+
 
 void
 value_Delete(Value *value)
@@ -742,9 +791,9 @@ builtin_Head(Environment *env, Value *x)
     CASSERT(x, x->cell[0]->type == CoolValue_Qexpr, "Function 'head' passed incorrect type, got %s", value_TypeString(x->cell[0]->type));
     CASSERT(x, x->cell[0]->count > 0, "Function 'head' passed {}, got %d", x->cell[0]->count);
 
-    Value *head = value_Take(x, 0);
+    Value *head = value_Take(x, 0); // pull out the list argument
     while (head->count > 1) {
-        value_Delete(value_Pop(head, 1));
+        value_Delete(value_Pop(head, 1)); // delete all elements after the head
     }
 
     return head;
@@ -937,6 +986,8 @@ builtin_Compare(Environment *env, Value *x, char *operator) {
         ret = value_Equal(x->cell[0], x->cell[1]);
     } else if (strcmp(operator, "!=") == 0) {
         ret = !value_Equal(x->cell[0], x->cell[1]);
+    } else {
+        // TODO: trap.
     }
 
     value_Delete(x);
@@ -1143,6 +1194,44 @@ builtin_Read(Environment *env, Value *x)
     return byteList;
 }
 
+Value *
+builtin_Write(Environment *env, Value *x)
+{
+    CASSERT_NUM("write", x, 1);
+    CASSERT_TYPE("write", x, 0, CoolValue_String);
+    CASSERT_TYPE("write", x, 1, CoolValue_Sexpr);
+    Value *bytesWritten = value_WriteContent(x->cell[0]->string, x->cell[1]);
+    value_Delete(x);
+    return bytesWritten;
+}
+
+Value *
+value_EvaluateExpressionWrapper(EvaluateWrapper *wrapper)
+{
+    Value *result = value_EvaluateExpression(wrapper->env, wrapper->param);
+    value_Println(stdout, result);
+    return result;
+}
+
+Value *
+builtin_Run(Environment *env, Value *x)
+{
+    pthread_t runner;
+    EvaluateWrapper *wrapper = (EvaluateWrapper *) malloc(sizeof(EvaluateWrapper));
+    wrapper->env = env;
+    wrapper->param = x;
+    if (pthread_create(&runner, NULL, (void *(*)(void *)) value_EvaluateExpressionWrapper, wrapper)) {
+        return value_Error("Error creating thread");
+    }
+    return value_SExpr();
+}
+
+Value *
+builtin_Spawn(Environment *env, Value *x)
+{
+    return NULL;
+}
+
 void
 environment_AddBuiltin(Environment *env, char *name, cbuiltin function)
 {
@@ -1162,6 +1251,8 @@ environment_AddBuiltinFunctions(Environment *env)
 
     environment_AddBuiltin(env, "read", builtin_Read);
     // environment_AddBuiltin(env, "write", builtin_write);
+    environment_AddBuiltin(env, "run", builtin_Run);
+    environment_AddBuiltin(env, "spawn", builtin_Spawn);
 
     environment_AddBuiltin(env, "\\", builtin_Lambda);
     environment_AddBuiltin(env, "def", builtin_Def);

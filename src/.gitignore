@@ -12,3 +12,6 @@ funcs
 cond
 strings
 
+*.gcov
+*.gcno
+*.gcda
