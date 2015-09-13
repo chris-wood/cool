@@ -349,30 +349,11 @@ value_WriteContent(char *contentName, Value *data)
         // TODO: insert interest issuance here
         return value_Error("Unable to open file %s", contentName);
     } else {
-        Value *value = value_SExpr();
-        char fileBuffer[FILE_BLOCK_SIZE];
-        size_t numBytesRead = 0;
-        for (;;) {
-            numBytesRead = fread(fileBuffer, 1, FILE_BLOCK_SIZE, fp);
-
-            // Copy fileBuffer bytes to the value list
-            int start = value->count;
-
-            value->count += numBytesRead;
-            value->cell = realloc(value->cell, sizeof(Value *) * value->count);
-
-            for (int i = 0; i < numBytesRead; i++) {
-                int index = start + i;
-                value->cell[index] = value_Byte(fileBuffer[i]);
-            }
-
-            // Reset the file buffer (to zeros) and check to see if we're done
-            memset(fileBuffer, 0, FILE_BLOCK_SIZE);
-            if (numBytesRead != FILE_BLOCK_SIZE) {
-                break;
-            }
+        for (int i = 0; i < data->count; i++) {
+            fputc(data->cell[i]->byte, fp);
         }
-        return value;
+        fclose(fp);
+        return value_SExpr();
     }
 }
 
@@ -1197,7 +1178,7 @@ builtin_Read(Environment *env, Value *x)
 Value *
 builtin_Write(Environment *env, Value *x)
 {
-    CASSERT_NUM("write", x, 1);
+    CASSERT_NUM("write", x, 2);
     CASSERT_TYPE("write", x, 0, CoolValue_String);
     CASSERT_TYPE("write", x, 1, CoolValue_Sexpr);
     Value *bytesWritten = value_WriteContent(x->cell[0]->string, x->cell[1]);
@@ -1218,8 +1199,8 @@ builtin_Run(Environment *env, Value *x)
 {
     pthread_t runner;
     EvaluateWrapper *wrapper = (EvaluateWrapper *) malloc(sizeof(EvaluateWrapper));
-    wrapper->env = env;
-    wrapper->param = x;
+    wrapper->env = environment_Copy(env);
+    wrapper->param = value_Copy(x);
     if (pthread_create(&runner, NULL, (void *(*)(void *)) value_EvaluateExpressionWrapper, wrapper)) {
         return value_Error("Error creating thread");
     }
@@ -1250,7 +1231,7 @@ environment_AddBuiltinFunctions(Environment *env)
     environment_AddBuiltin(env, "error", builtin_Error);
 
     environment_AddBuiltin(env, "read", builtin_Read);
-    // environment_AddBuiltin(env, "write", builtin_write);
+    environment_AddBuiltin(env, "write", builtin_Write);
     environment_AddBuiltin(env, "run", builtin_Run);
     environment_AddBuiltin(env, "spawn", builtin_Spawn);
 
