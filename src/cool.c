@@ -357,7 +357,6 @@ value_WriteContent(char *contentName, Value *data)
     }
 }
 
-
 void
 value_Delete(Value *value)
 {
