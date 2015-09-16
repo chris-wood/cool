@@ -3,6 +3,8 @@
 
 typedef size_t ActorID;
 typedef struct actor_message ActorMessage;
-typedef struct actor_message_queue ActorMessageQueue;
+
+Actor *actor_Create();
+Actor *actor_SendMessage(Actor *actor, ActorMessage *message);
 
 #endif // libcool_internal_actor_
