@@ -1,87 +1,127 @@
+#include <stdlib.h>
 #include <pthread.h>
 
-#include "list.h"
+#include "channel.h"
 
-struct list_node;
+struct channel_entry;
 
-struct list_node {
+struct channel_entry {
     void *element;
-    list_node *next;
-}
-
-struct list {
-    list_node *head;
-    list_node *tail;
-    size_t size;
-    pthread_mutex_t mutex;
-    void *(delete)(void **element);
+    struct channel_entry *next;
 };
 
-ListNode *
-listNode_Create(void *element)
+typedef struct channel_entry ChannelEntry;
+
+struct channel {
+    struct channel_entry *head;
+    struct channel_entry *tail;
+    size_t size;
+
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+
+    void (*delete)(void **element);
+};
+
+void
+channelEntry_Destroy(ChannelEntry **nodeP)
 {
-    ListNode *result = (ListNode *) malloc(sizeof(ListNode));
+    ChannelEntry *result = (ChannelEntry *) *nodeP;
+    free(result);
+    *nodeP = NULL;
+}
+
+ChannelEntry *
+channelEntry_Create(void *element)
+{
+    ChannelEntry *result = (ChannelEntry *) malloc(sizeof(ChannelEntry));
     result->element = element;
     result->next = NULL;
     return result;
 }
 
-List *
-list_Create((void *(void **) delete))
+Channel *
+channel_Create(void (*delete)(void **element))
 {
-    List *result = (List *) malloc(sizeof(List));
+    Channel *result = (Channel *) malloc(sizeof(Channel));
     result->size = 0;
     result->head = result->tail = NULL;
     result->delete = delete;
+
     pthread_mutex_init(&result->mutex, NULL);
+    pthread_cond_init(&result->cond, NULL);
+
     return result;
 }
 
 void
-list_Destroy(List **listP)
+channel_Destroy(Channel **channelP)
 {
-    List *list = (List *) *listP;
+    Channel *channel = (Channel *) *channelP;
 
-    ListNode *current = list->head;
-    for (size_t i = 0; i < list->size; i++) {
-        delete(&node->element);
+    ChannelEntry *current = channel->head;
+    for (size_t i = 0; i < channel->size; i++) {
+        channel->delete(&(current->element));
         current = current->next;
     }
 
-    free(list);
-    *listP = NULL;
+    pthread_mutex_destroy(&channel->mutex);
+    pthread_cond_destroy(&channel->cond);
+
+    free(channel);
+    *channelP = NULL;
 }
 
 void
-list_Append(List *list, void *element)
+channel_Enqueue(Channel *channel, void *element)
 {
-    ListNode *newNode = listNode_Create(element);
+    ChannelEntry *newNode = channelEntry_Create(element);
 
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&channel->mutex);
 
-    if (list->tail == NULL) {
-        head = tail = newNode;
+    if (channel->tail == NULL) {
+        channel->head = channel->tail = newNode;
     } else {
-        list->tail->next = newNode;
-        list->tail = newNode;
+        channel->tail->next = newNode;
+        channel->tail = newNode;
     }
 
-    list->size++;
+    channel->size++;
 
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&channel->mutex);
 }
 
 void *
-list_GetAtIndex(List *list, size_t index)
+channel_Dequeue(Channel *channel)
 {
-    ListNode *element = NULL;
+    pthread_mutex_lock(&channel->mutex);
 
-    pthread_mutex_lock(&mutex);
+    while (channel->size == 0) {
+        pthread_cond_wait(&(channel->cond), &(channel->mutex));
+    }
 
-    // TODO: maybe reconsider this behavior...
-    index = (index % list->size);
+    ChannelEntry *target = channel->head;
+    void *result = target->element;
+    channelEntry_Destroy(&target);
 
-    ListNode *current = list->head;
+    channel->head = channel->head->next;
+
+    pthread_cond_signal(&channel->cond);
+    pthread_mutex_unlock(&channel->mutex);
+
+    return result;
+}
+
+void *
+channel_GetAtIndex(Channel *channel, size_t index)
+{
+    ChannelEntry *element = NULL;
+
+    pthread_mutex_lock(&channel->mutex);
+
+    index = (index % channel->size);
+
+    ChannelEntry *current = channel->head;
     size_t i = 0;
     while (i < index) {
         current = current->next;
@@ -90,29 +130,29 @@ list_GetAtIndex(List *list, size_t index)
 
     element = current;
 
-    pthread_mutex_unlock(&mutex);
+    pthread_mutex_unlock(&channel->mutex);
 
     return element;
 }
 
 void *
-list_RemoveAtIndex(List *list, void *element, size_t index)
+channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
 {
-    pthread_mutex_lock(&mutex);
+    pthread_mutex_lock(&channel->mutex);
 
-    if (list->head == NULL) {
-        pthread_mutex_unlock(&mutex);
+    if (channel->head == NULL) {
+        pthread_mutex_unlock(&channel->mutex);
         return NULL;
     } else {
 
-        index = index % list->size;
-        ListNode *target = list->head;
+        index = index % channel->size;
+        ChannelEntry *target = channel->head;
 
         if (index == 0) {
-            list->head = list->next;
+            channel->head = channel->head->next;
         } else {
             size_t i = 0;
-            ListNode *prev = NULL;
+            ChannelEntry *prev = NULL;
 
             while (i < index) {
                 prev = target;
@@ -121,14 +161,14 @@ list_RemoveAtIndex(List *list, void *element, size_t index)
             }
             prev->next = target->next;
 
-            if (index == (list->size - 1)) {
-                list->tail = prev; // move back
+            if (index == (channel->size - 1)) {
+                channel->tail = prev; // move back
             }
         }
 
-        list->size--;
+        channel->size--;
 
-        pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&channel->mutex);
 
         return target;
     }

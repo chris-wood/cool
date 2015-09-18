@@ -1,14 +1,26 @@
-#ifndef libcool_internal_list_
-#define libcool_internal_list_
+#ifndef libcool_internal_channel_
+#define libcool_internal_channel_
 
-typedef struct list List
-typedef struct list_node ListNode;
+typedef struct channel Channel;
 
-ListNode *listNode_Create(void *element);
-List *list_Create();
-void list_Destroy((void (*)(void **)) deleteNode);
-void list_Append(List *list, void *element);
-void *list_GetAtIndex(List *list, size_t index);
-void *list_RemoveAtIndex(List *list, void *element, size_t index);
+/**
+ * Create a `ChannelNode` from a pointer to an arbitrary thing. It is expected
+ * that each element in a `Channel` will be of the same type.
+ *
+ * @param [in] element A pointer to an element from which to create a node.
+ *
+ * Example:
+ * @code
+ * {
+ *     TODO
+ * }
+ * @endcode
+ */
+Channel *channel_Create();
+void channel_Destroy(Channel **channelP);
+void channel_Enqueue(Channel *channel, void *element);
+void *channel_Dequeue(Channel *channel);
+void *channel_GetAtIndex(Channel *channel, size_t index);
+void *channel_RemoveAtIndex(Channel *channel, void *element, size_t index);
 
-#endif // libcool_internal_list_
+#endif // libcool_internal_channel_
