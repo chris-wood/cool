@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include "cool.h"
+#include "internal/actor.h"
 
 #define FILE_BLOCK_SIZE 128
 
@@ -18,6 +19,7 @@ struct cval {
         double fpnumber;
         uint8_t byte;
         mpz_t bignumber;
+        Actor *actor;
     };
 
     char *errorString;
@@ -259,6 +261,18 @@ value_Lambda(Value *formals, Value *body)
     value->env = environment_Create();
     value->formals = formals;
     value->body = body;
+    return value;
+}
+
+Value *
+value_Actor(Environment *env)
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Actor;
+    value->count = 0;
+    value->cell = NULL;
+    value->actor = actor_Create();
+    value->env = environment_Copy(env);
     return value;
 }
 
@@ -1201,7 +1215,7 @@ builtin_Run(Environment *env, Value *x)
     wrapper->env = environment_Copy(env);
     wrapper->param = value_Copy(x);
     if (pthread_create(&runner, NULL, (void *(*)(void *)) value_EvaluateExpressionWrapper, wrapper)) {
-        return value_Error("Error creating thread");
+        return value_Error("Error creating thread runner");
     }
     return value_SExpr();
 }
@@ -1209,7 +1223,11 @@ builtin_Run(Environment *env, Value *x)
 Value *
 builtin_Spawn(Environment *env, Value *x)
 {
-    return NULL;
+    Value *actorWrapper = value_Actor(env);
+
+    // TODO: does an actor hold onto the environment? Does a value contain an actor with a pointer to its parent value?
+
+    return actorWrapper;
 }
 
 void

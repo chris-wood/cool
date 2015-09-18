@@ -22,6 +22,7 @@ typedef enum {
     CoolValue_Sexpr,
     CoolValue_Qexpr,
     CoolValue_Function,
+    CoolValue_Actor,
     CoolValue_Error
 } CoolValue;
 
