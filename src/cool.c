@@ -1224,9 +1224,7 @@ Value *
 builtin_Spawn(Environment *env, Value *x)
 {
     Value *actorWrapper = value_Actor(env);
-
-    // TODO: does an actor hold onto the environment? Does a value contain an actor with a pointer to its parent value?
-
+    // TODO: set the actor name,
     return actorWrapper;
 }
 
