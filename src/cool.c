@@ -60,6 +60,7 @@ char *value_TypeString(int type);
 Value *builtin_Eval(Environment *env, Value *x);
 Value *builtin_List(Environment *env, Value *x);
 Value *value_EvaluateExpression(Environment *env, Value *value);
+Value *value_Call(Environment *env, Value *function, Value *x);
 
 #define CASSERT(args, cond, fmt, ...) \
     if (!(cond)) { \
@@ -265,14 +266,24 @@ value_Lambda(Value *formals, Value *body)
 }
 
 Value *
-value_Actor(Environment *env)
+value_FunctionWrapper(EvaluateWrapper *wrapper, Value *parameters) {
+    return value_Call(wrapper->env, wrapper->param, parameters);
+}
+
+Value *
+value_Actor(Environment *env, Value *function)
 {
     Value *value = (Value *) malloc(sizeof(Value));
     value->type = CoolValue_Actor;
     value->count = 0;
     value->cell = NULL;
-    value->actor = actor_Create();
     value->env = environment_Copy(env);
+
+    EvaluateWrapper *wrapper = (EvaluateWrapper *) malloc(sizeof(EvaluateWrapper));
+    wrapper->env = value->env;
+    wrapper->param = function;
+    value->actor = actor_Create((void *) wrapper, (void *(*)(void *, void *)) value_FunctionWrapper);
+
     return value;
 }
 
@@ -1223,8 +1234,16 @@ builtin_Run(Environment *env, Value *x)
 Value *
 builtin_Spawn(Environment *env, Value *x)
 {
-    Value *actorWrapper = value_Actor(env);
-    // TODO: set the actor name,
+    // TODO: assert types and numbers of things
+
+    Value *actorWrapper = value_Actor(env, x->cell[1]);
+    // caw: value_Call(env, x->cell[1], message)
+
+    actorWrapper->string = (char *) malloc((strlen(x->cell[0]->string) + 1) * sizeof(char));
+    strcpy(actorWrapper->string, x->cell[0]->string);
+
+    actor_Start(actorWrapper->actor);
+
     return actorWrapper;
 }
 
