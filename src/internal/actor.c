@@ -22,6 +22,8 @@ struct actor_message_queue {
 struct actor {
     ActorID id;
     ActorMessageQueue *inputQueue;
+    void *(*callback)(void *metadata, void *message);
+    void *metadata;
 };
 
 ActorMessageQueue *
@@ -39,16 +41,33 @@ actorMessageQueue_PushMessage(ActorMessageQueue *queue, ActorMessage *message)
     return queue;
 }
 
+void *
+actorMessageQueue_PopMessage(ActorMessageQueue *queue)
+{
+    return channel_Dequeue(queue->channel);
+}
+
 Actor *
-actor_Create()
+actor_Create(void *metadata, void *(*callback)(void *metadata, void *message))
 {
     Actor *actor = (Actor *) malloc(sizeof(Actor));
     volatile size_t inc = 1;
 
     actor->id = __sync_fetch_and_add(&_actorId, inc);
     actor->inputQueue = actorMessageQueue_Create();
+    actor->callback = callback;
+    actor->metadata = metadata;
 
     return actor;
+}
+
+void
+actor_Start(Actor *actor)
+{
+    for (;;) {
+        void *message = actorMessageQueue_PopMessage(actor->inputQueue);
+        actor->callback(actor->metadata, message);
+    }
 }
 
 Actor *
