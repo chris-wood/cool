@@ -4,13 +4,13 @@ LIBRARIES=-ledit -lgmp -lm
 
 INTERNAL_SOURCE=internal/actor.c internal/channel.c
 
-all: cool cooli
+all: libcool cool
 
-cool: cool.c mpc.c
-	$(CC) $(CFLAGS) -shared -o cool.so cool.c mpc.c $(INTERNAL_SOURCE) $(LIBRARIES)
+libcool: cool.c mpc.c
+	$(CC) $(CFLAGS) -shared -o libcool.so cool.c mpc.c $(INTERNAL_SOURCE) $(LIBRARIES)
 
-cooli: cooli.o
-	$(CC) $(CFLAGS) -o cooli cooli.c cool.so $(LIBRARIES)
+cool: cool.o
+	$(CC) $(CFLAGS) -o cool cooli.c libcool.so $(LIBRARIES)
 
 clean:
-	rm -rf *.so *.o
+	rm -rf *.so *.o cool *.gcno 
