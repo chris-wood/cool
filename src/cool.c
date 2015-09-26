@@ -1094,6 +1094,30 @@ builtin_Operator(Environment *env, Value *expr, char* op)
 }
 
 Value *
+builtin_SendAsync(Environment *env, Value *val)
+{
+    CASSERT_NUM("<!", val, 2);
+    CASSERT_TYPE("<!", val, 0, CoolValue_String);
+    CASSERT_TYPE("<!", val, 1, CoolValue_Sexpr);
+
+    // Look up the string and gets the actor value
+    Value *actorWrapper = environment_Get(env, val->cell[0]);
+
+    // TODO: if Get fails, then we should issue an interest!
+
+    actor_SendMessage(actorWrapper->actor, val->cell[1]);
+
+    return value_SExpr();
+}
+
+Value *
+builtin_SendSync(Environment *env, Value *val)
+{
+    // TODO: implement me...
+    return value_SExpr();
+}
+
+Value *
 builtin_add(Environment *env, Value *val)
 {
     return builtin_Operator(env, val, "+");
@@ -1234,8 +1258,11 @@ builtin_Run(Environment *env, Value *x)
 Value *
 builtin_Spawn(Environment *env, Value *x)
 {
-    // TODO: assert types and numbers of things
+    CASSERT_NUM("spawn", x, 2);
+    CASSERT_TYPE("spawn", x, 0, CoolValue_String);
+    CASSERT_TYPE("spawn", x, 1, CoolValue_Function);
 
+    // syntax: spawn <name> <function>
     Value *actorWrapper = value_Actor(env, x->cell[1]);
     // caw: value_Call(env, x->cell[1], message)
 
@@ -1287,6 +1314,8 @@ environment_AddBuiltinFunctions(Environment *env)
     environment_AddBuiltin(env, "head", builtin_Head);
     environment_AddBuiltin(env, "tail", builtin_Tail);
 
+    environment_AddBuiltin(env, "<!", builtin_SendAsync);
+    environment_AddBuiltin(env, "<-", builtin_SendSync);
     environment_AddBuiltin(env, "+", builtin_add);
     environment_AddBuiltin(env, "-", builtin_sub);
     environment_AddBuiltin(env, "*", builtin_mul);
@@ -1313,6 +1342,7 @@ value_EvaluateExpression(Environment *env, Value *value)
     if (value->count == 0) {
         return value;
     }
+    printf("%s\n", value_TypeString(value->type));
 
     if (value->count == 1) {
         return value_Take(value, 0);
