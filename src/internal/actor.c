@@ -35,7 +35,7 @@ actorMessageQueue_Create()
 }
 
 ActorMessageQueue *
-actorMessageQueue_PushMessage(ActorMessageQueue *queue, ActorMessage *message)
+actorMessageQueue_PushMessage(ActorMessageQueue *queue, void *message)
 {
     channel_Enqueue(queue->channel, message);
     return queue;
@@ -61,8 +61,8 @@ actor_Create(void *metadata, void *(*callback)(void *metadata, void *message))
     return actor;
 }
 
-void
-actor_Start(Actor *actor)
+static void
+_actor_Run(Actor *actor)
 {
     for (;;) {
         void *message = actorMessageQueue_PopMessage(actor->inputQueue);
@@ -70,8 +70,15 @@ actor_Start(Actor *actor)
     }
 }
 
+void
+actor_Start(Actor *actor)
+{
+    pthread_t *t = (pthread_t *) malloc(sizeof(pthread_t));
+    pthread_create(t, NULL, (void *) &_actor_Run, (void *) actor);
+}
+
 Actor *
-actor_SendMessage(Actor *actor, ActorMessage *message)
+actor_SendMessage(Actor *actor, void *message)
 {
     actorMessageQueue_PushMessage(actor->inputQueue, message);
     return actor;
