@@ -79,7 +79,7 @@ channel_Enqueue(Channel *channel, void *element)
 
     pthread_mutex_lock(&channel->mutex);
 
-    if (channel->tail == NULL) {
+    if (channel->head == NULL || channel->tail == NULL) {
         channel->head = channel->tail = newNode;
     } else {
         channel->tail->next = newNode;
@@ -88,6 +88,7 @@ channel_Enqueue(Channel *channel, void *element)
 
     channel->size++;
 
+    pthread_cond_signal(&channel->cond);
     pthread_mutex_unlock(&channel->mutex);
 }
 
@@ -105,6 +106,7 @@ channel_Dequeue(Channel *channel)
     channelEntry_Destroy(&target);
 
     channel->head = channel->head->next;
+    channel->size--;
 
     pthread_cond_signal(&channel->cond);
     pthread_mutex_unlock(&channel->mutex);

@@ -48,7 +48,7 @@ actorMessageQueue_PopMessage(ActorMessageQueue *queue)
 }
 
 Actor *
-actor_Create(void *metadata, void *(*callback)(void *metadata, void *message))
+actor_Create(void *callbackMetadata, void *(*callback)(void *, void *))
 {
     Actor *actor = (Actor *) malloc(sizeof(Actor));
     volatile size_t inc = 1;
@@ -56,7 +56,7 @@ actor_Create(void *metadata, void *(*callback)(void *metadata, void *message))
     actor->id = __sync_fetch_and_add(&_actorId, inc);
     actor->inputQueue = actorMessageQueue_Create();
     actor->callback = callback;
-    actor->metadata = metadata;
+    actor->metadata = callbackMetadata;
 
     return actor;
 }
