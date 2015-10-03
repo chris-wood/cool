@@ -267,7 +267,8 @@ value_Lambda(Value *formals, Value *body)
 
 Value *
 value_FunctionWrapper(EvaluateWrapper *wrapper, Value *parameters) {
-    return value_Call(wrapper->env, wrapper->param, parameters);
+    Value *result = value_Call(wrapper->env, wrapper->param, parameters);
+    return result;
 }
 
 Value *
@@ -281,7 +282,7 @@ value_Actor(Environment *env, Value *function)
 
     EvaluateWrapper *wrapper = (EvaluateWrapper *) malloc(sizeof(EvaluateWrapper));
     wrapper->env = value->env;
-    wrapper->param = function;
+    wrapper->param = value_Copy(function);
     value->actor = actor_Create((void *) wrapper, (void *(*)(void *, void *)) value_FunctionWrapper);
 
     return value;
@@ -307,6 +308,8 @@ value_TypeString(int type)
             return "CoolValue_Byte";
         case CoolValue_String:
             return "CoolValue_String";
+        case CoolValue_Actor:
+            return "CoolValue_Actor";
         case CoolValue_Symbol:
         default:
             return "CoolValue_Symbol";
@@ -386,6 +389,9 @@ void
 value_Delete(Value *value)
 {
     switch (value->type) {
+        case CoolValue_Actor:
+            free(value->symbolString);
+            break;
         case CoolValue_Integer:
             mpz_clear(value->bignumber);
             break;
@@ -438,10 +444,7 @@ value_Print(FILE* out, Value *value)
 {
     switch (value->type) {
         case CoolValue_Integer: {
-            mpz_out_str(out,10,value->bignumber);
-            // char *repr = mpz_get_str(NULL, 10, value->bignumber);
-            // fprintf(out, "%s", repr);
-            // free(repr);
+            mpz_out_str(out, 10, value->bignumber);
             break;
         }
         case CoolValue_Double:
@@ -493,6 +496,12 @@ value_Copy(Value *in)
     copy->type = in->type;
 
     switch (in->type) {
+        case CoolValue_Actor:
+            copy->env = environment_Copy(in->env);
+            copy->actor = in->actor; // TODO: implement actor copy
+            copy->symbolString = (char *) malloc((strlen(in->symbolString) + 1) * sizeof(char));
+            strcpy(copy->symbolString, in->symbolString);
+            break;
         case CoolValue_Function:
             if (in->builtin != NULL) {
                 copy->builtin = in->builtin;
@@ -834,6 +843,7 @@ builtin_Eval(Environment *env, Value *x)
     // pop the head and evaluate it
     Value *head = value_Take(x, 0);
     head->type = CoolValue_Sexpr;
+
     Value *evalResult = value_Eval(env, head);
 
     return evalResult;
@@ -1101,11 +1111,18 @@ builtin_SendAsync(Environment *env, Value *val)
     CASSERT_TYPE("<!", val, 1, CoolValue_Sexpr);
 
     // Look up the string and gets the actor value
-    Value *actorWrapper = environment_Get(env, val->cell[0]);
+    Value *lookupSymbol = value_Symbol(val->cell[0]->string);
+    Value *actorWrapper = environment_Get(env, lookupSymbol);
 
-    // TODO: if Get fails, then we should issue an interest!
-
-    actor_SendMessage(actorWrapper->actor, val->cell[1]);
+    printf("failed\n");
+    if (actorWrapper->type != CoolValue_Actor) {
+        actor_SendMessage(actorWrapper->actor, val->cell[1]);
+    } else if (actorWrapper->type == CoolValue_Error) {
+        // TODO: issue an interest
+        printf("Actor not found locally -- think outside the box.\n");
+    } else {
+        return value_Error("Invalid type returned when indexing into the Actor\n");
+    }
 
     return value_SExpr();
 }
@@ -1113,7 +1130,12 @@ builtin_SendAsync(Environment *env, Value *val)
 Value *
 builtin_SendSync(Environment *env, Value *val)
 {
-    // TODO: implement me...
+    CASSERT_NUM("<-", val, 2);
+    CASSERT_TYPE("<-", val, 0, CoolValue_String);
+    CASSERT_TYPE("<-", val, 1, CoolValue_Sexpr);
+
+    // TODO: implement me... return the result of the computation (it blocks...)
+
     return value_SExpr();
 }
 
@@ -1264,10 +1286,11 @@ builtin_Spawn(Environment *env, Value *x)
 
     // syntax: spawn <name> <function>
     Value *actorWrapper = value_Actor(env, x->cell[1]);
-    // caw: value_Call(env, x->cell[1], message)
+    actorWrapper->symbolString = (char *) malloc((strlen(x->cell[0]->string) + 1) * sizeof(char));
+    strcpy(actorWrapper->symbolString, x->cell[0]->string);
 
-    actorWrapper->string = (char *) malloc((strlen(x->cell[0]->string) + 1) * sizeof(char));
-    strcpy(actorWrapper->string, x->cell[0]->string);
+    Value *actorKey = value_Symbol(actorWrapper->symbolString);
+    environment_DefineKeyValue(env, actorKey, actorWrapper);
 
     actor_Start(actorWrapper->actor);
 
@@ -1342,7 +1365,6 @@ value_EvaluateExpression(Environment *env, Value *value)
     if (value->count == 0) {
         return value;
     }
-    printf("%s\n", value_TypeString(value->type));
 
     if (value->count == 1) {
         return value_Take(value, 0);
