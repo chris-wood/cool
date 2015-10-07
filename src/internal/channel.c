@@ -2,12 +2,15 @@
 #include <pthread.h>
 
 #include "channel.h"
+#include "signal.h"
 
 struct channel_entry;
 
 struct channel_entry {
     void *element;
     struct channel_entry *next;
+    Signal *signal;
+
 };
 
 typedef struct channel_entry ChannelEntry;
@@ -16,9 +19,7 @@ struct channel {
     struct channel_entry *head;
     struct channel_entry *tail;
     size_t size;
-
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
+    Signal *signal;
 
     void (*delete)(void **element);
 };
@@ -37,6 +38,9 @@ channelEntry_Create(void *element)
     ChannelEntry *result = (ChannelEntry *) malloc(sizeof(ChannelEntry));
     result->element = element;
     result->next = NULL;
+    // pthread_mutex_init(&result->mutex, NULL);
+    // pthread_cond_init(&result->cond, NULL);
+    result->signal = signal_Create(result);
     return result;
 }
 
@@ -47,9 +51,10 @@ channel_Create(void (*delete)(void **element))
     result->size = 0;
     result->head = result->tail = NULL;
     result->delete = delete;
+    result->signal = signal_Create(result);
 
-    pthread_mutex_init(&result->mutex, NULL);
-    pthread_cond_init(&result->cond, NULL);
+    // pthread_mutex_init(&result->mutex, NULL);
+    // pthread_cond_init(&result->cond, NULL);
 
     return result;
 }
@@ -65,19 +70,21 @@ channel_Destroy(Channel **channelP)
         current = current->next;
     }
 
-    pthread_mutex_destroy(&channel->mutex);
-    pthread_cond_destroy(&channel->cond);
+    signal_Destroy(&channel->signal);
+    // pthread_mutex_destroy(&channel->mutex);
+    // pthread_cond_destroy(&channel->cond);
 
     free(channel);
     *channelP = NULL;
 }
 
-void
+void *
 channel_Enqueue(Channel *channel, void *element)
 {
     ChannelEntry *newNode = channelEntry_Create(element);
 
-    pthread_mutex_lock(&channel->mutex);
+    // pthread_mutex_lock(&channel->mutex);
+    signal_Lock(channel->signal);
 
     if (channel->head == NULL || channel->tail == NULL) {
         channel->head = channel->tail = newNode;
@@ -88,18 +95,28 @@ channel_Enqueue(Channel *channel, void *element)
 
     channel->size++;
 
-    pthread_cond_signal(&channel->cond);
-    pthread_mutex_unlock(&channel->mutex);
+    // pthread_cond_signal(&channel->cond);
+    // pthread_mutex_unlock(&channel->mutex);
+    signal_Notify(channel->signal);
+
+    return NULL;
+}
+
+int
+channel_IsEmpty(Channel *channel)
+{
+    return channel->size == 0;
 }
 
 void *
 channel_Dequeue(Channel *channel)
 {
-    pthread_mutex_lock(&channel->mutex);
-
-    while (channel->size == 0) {
-        pthread_cond_wait(&(channel->cond), &(channel->mutex));
-    }
+    // pthread_mutex_lock(&channel->mutex);
+    //
+    // while (channel->size == 0) {
+    //     pthread_cond_wait(&(channel->cond), &(channel->mutex));
+    // }
+    signal_Wait(channel->signal, (int (*)(void *)) channel_IsEmpty);
 
     ChannelEntry *target = channel->head;
     void *result = target->element;
@@ -108,8 +125,9 @@ channel_Dequeue(Channel *channel)
     channel->head = channel->head->next;
     channel->size--;
 
-    pthread_cond_signal(&channel->cond);
-    pthread_mutex_unlock(&channel->mutex);
+    // pthread_cond_signal(&channel->cond);
+    // pthread_mutex_unlock(&channel->mutex);
+    signal_Notify(channel->signal);
 
     return result;
 }
@@ -119,7 +137,8 @@ channel_GetAtIndex(Channel *channel, size_t index)
 {
     ChannelEntry *element = NULL;
 
-    pthread_mutex_lock(&channel->mutex);
+    // pthread_mutex_lock(&channel->mutex);
+    signal_Lock(channel->signal);
 
     index = (index % channel->size);
 
@@ -132,7 +151,8 @@ channel_GetAtIndex(Channel *channel, size_t index)
 
     element = current;
 
-    pthread_mutex_unlock(&channel->mutex);
+    // pthread_mutex_unlock(&channel->mutex);
+    signal_Unlock(channel->signal);
 
     return element;
 }
@@ -140,10 +160,12 @@ channel_GetAtIndex(Channel *channel, size_t index)
 void *
 channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
 {
-    pthread_mutex_lock(&channel->mutex);
+    // pthread_mutex_lock(&channel->mutex);
+    signal_Lock(channel->signal);
 
     if (channel->head == NULL) {
-        pthread_mutex_unlock(&channel->mutex);
+        // pthread_mutex_unlock(&channel->mutex);
+        signal_Unlock(channel->signal);
         return NULL;
     } else {
 
@@ -170,7 +192,8 @@ channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
 
         channel->size--;
 
-        pthread_mutex_unlock(&channel->mutex);
+        // pthread_mutex_unlock(&channel->mutex);
+        signal_Unlock(channel->signal);
 
         return target;
     }

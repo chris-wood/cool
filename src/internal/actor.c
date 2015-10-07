@@ -77,11 +77,18 @@ actor_Start(Actor *actor)
     pthread_create(t, NULL, (void *) &_actor_Run, (void *) actor);
 }
 
-Actor *
-actor_SendMessage(Actor *actor, void *message)
+void *
+actor_SendMessageAsync(Actor *actor, void *message)
 {
     actorMessageQueue_PushMessage(actor->inputQueue, message);
-    return actor;
+    return NULL;
+}
+
+void *
+actor_SendMessageSync(Actor *actor, void *message)
+{
+    actorMessageQueue_PushMessage(actor->inputQueue, message);
+    return NULL;
 }
 
 ActorID
