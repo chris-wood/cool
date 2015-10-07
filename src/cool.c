@@ -1114,9 +1114,8 @@ builtin_SendAsync(Environment *env, Value *val)
     Value *lookupSymbol = value_Symbol(val->cell[0]->string);
     Value *actorWrapper = environment_Get(env, lookupSymbol);
 
-    printf("failed\n");
-    if (actorWrapper->type != CoolValue_Actor) {
-        actor_SendMessage(actorWrapper->actor, val->cell[1]);
+    if (actorWrapper->type == CoolValue_Actor) {
+        actor_SendMessageAsync(actorWrapper->actor, val->cell[1]);
     } else if (actorWrapper->type == CoolValue_Error) {
         // TODO: issue an interest
         printf("Actor not found locally -- think outside the box.\n");

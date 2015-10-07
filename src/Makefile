@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-std=c99 -Wall -ftest-coverage -fprofile-arcs
 LIBRARIES=-ledit -lgmp -lm
 
-INTERNAL_SOURCE=internal/actor.c internal/channel.c
+INTERNAL_SOURCE=internal/actor.c internal/channel.c internal/signal.c
 
 all: libcool cool
 
@@ -13,4 +13,4 @@ cool: cool.o
 	$(CC) $(CFLAGS) -o cool cooli.c libcool.so $(LIBRARIES)
 
 clean:
-	rm -rf *.so *.o cool *.gcno 
+	rm -rf *.so *.o cool *.gcno
