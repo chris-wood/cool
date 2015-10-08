@@ -34,11 +34,11 @@ actorMessageQueue_Create()
     return queue;
 }
 
-ActorMessageQueue *
+Signal *
 actorMessageQueue_PushMessage(ActorMessageQueue *queue, void *message)
 {
-    channel_Enqueue(queue->channel, message);
-    return queue;
+    Signal *signal = channel_Enqueue(queue->channel, message);
+    return signal;
 }
 
 void *
@@ -77,18 +77,18 @@ actor_Start(Actor *actor)
     pthread_create(t, NULL, (void *) &_actor_Run, (void *) actor);
 }
 
-void *
+void
 actor_SendMessageAsync(Actor *actor, void *message)
 {
     actorMessageQueue_PushMessage(actor->inputQueue, message);
-    return NULL;
 }
 
 void *
 actor_SendMessageSync(Actor *actor, void *message)
 {
-    actorMessageQueue_PushMessage(actor->inputQueue, message);
-    return NULL;
+    Signal *signal = actorMessageQueue_PushMessage(actor->inputQueue, message);
+    signal_Wait(signal, NULL);
+    return NULL; // this should be the response we get back from the actor
 }
 
 ActorID

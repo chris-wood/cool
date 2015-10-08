@@ -2,7 +2,6 @@
 #include <pthread.h>
 
 #include "channel.h"
-#include "signal.h"
 
 struct channel_entry;
 
@@ -71,7 +70,7 @@ channel_Destroy(Channel **channelP)
     *channelP = NULL;
 }
 
-void *
+Signal *
 channel_Enqueue(Channel *channel, void *element)
 {
     ChannelEntry *newNode = channelEntry_Create(element);
@@ -89,7 +88,7 @@ channel_Enqueue(Channel *channel, void *element)
 
     signal_Notify(channel->signal);
 
-    return NULL;
+    return newNode->signal;
 }
 
 int

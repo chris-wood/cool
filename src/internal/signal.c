@@ -49,7 +49,11 @@ signal_Wait(Signal *signal, int (*condition)(void *state))
 {
     pthread_mutex_lock(&signal->mutex);
 
-    while (condition(signal->context) >= 1) {
+    if (condition != NULL) {
+        while (condition(signal->context) >= 1) {
+            pthread_cond_wait(&(signal->cond), &(signal->mutex));
+        }
+    } else {
         pthread_cond_wait(&(signal->cond), &(signal->mutex));
     }
 }

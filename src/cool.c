@@ -1134,6 +1134,17 @@ builtin_SendSync(Environment *env, Value *val)
     CASSERT_TYPE("<-", val, 1, CoolValue_Sexpr);
 
     // TODO: implement me... return the result of the computation (it blocks...)
+    Value *lookupSymbol = value_Symbol(val->cell[0]->string);
+    Value *actorWrapper = environment_Get(env, lookupSymbol);
+
+    if (actorWrapper->type == CoolValue_Actor) {
+        actor_SendMessageAsync(actorWrapper->actor, val->cell[1]);
+    } else if (actorWrapper->type == CoolValue_Error) {
+        // TODO: issue a blocking interest
+        printf("Actor not found locally -- think outside the box.\n");
+    } else {
+        return value_Error("Invalid type returned when indexing into the Actor\n");
+    }
 
     return value_SExpr();
 }

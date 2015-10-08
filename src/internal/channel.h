@@ -1,6 +1,8 @@
 #ifndef libcool_internal_channel_
 #define libcool_internal_channel_
 
+#include "signal.h"
+
 typedef struct channel Channel;
 
 /**
@@ -18,7 +20,7 @@ typedef struct channel Channel;
  */
 Channel *channel_Create();
 void channel_Destroy(Channel **channelP);
-void *channel_Enqueue(Channel *channel, void *element);
+Signal *channel_Enqueue(Channel *channel, void *element);
 void *channel_Dequeue(Channel *channel);
 void *channel_GetAtIndex(Channel *channel, size_t index);
 void *channel_RemoveAtIndex(Channel *channel, void *element, size_t index);
