@@ -38,8 +38,6 @@ channelEntry_Create(void *element)
     ChannelEntry *result = (ChannelEntry *) malloc(sizeof(ChannelEntry));
     result->element = element;
     result->next = NULL;
-    // pthread_mutex_init(&result->mutex, NULL);
-    // pthread_cond_init(&result->cond, NULL);
     result->signal = signal_Create(result);
     return result;
 }
@@ -52,9 +50,6 @@ channel_Create(void (*delete)(void **element))
     result->head = result->tail = NULL;
     result->delete = delete;
     result->signal = signal_Create(result);
-
-    // pthread_mutex_init(&result->mutex, NULL);
-    // pthread_cond_init(&result->cond, NULL);
 
     return result;
 }
@@ -71,8 +66,6 @@ channel_Destroy(Channel **channelP)
     }
 
     signal_Destroy(&channel->signal);
-    // pthread_mutex_destroy(&channel->mutex);
-    // pthread_cond_destroy(&channel->cond);
 
     free(channel);
     *channelP = NULL;
@@ -83,7 +76,6 @@ channel_Enqueue(Channel *channel, void *element)
 {
     ChannelEntry *newNode = channelEntry_Create(element);
 
-    // pthread_mutex_lock(&channel->mutex);
     signal_Lock(channel->signal);
 
     if (channel->head == NULL || channel->tail == NULL) {
@@ -95,8 +87,6 @@ channel_Enqueue(Channel *channel, void *element)
 
     channel->size++;
 
-    // pthread_cond_signal(&channel->cond);
-    // pthread_mutex_unlock(&channel->mutex);
     signal_Notify(channel->signal);
 
     return NULL;
@@ -111,11 +101,6 @@ channel_IsEmpty(Channel *channel)
 void *
 channel_Dequeue(Channel *channel)
 {
-    // pthread_mutex_lock(&channel->mutex);
-    //
-    // while (channel->size == 0) {
-    //     pthread_cond_wait(&(channel->cond), &(channel->mutex));
-    // }
     signal_Wait(channel->signal, (int (*)(void *)) channel_IsEmpty);
 
     ChannelEntry *target = channel->head;
@@ -125,8 +110,6 @@ channel_Dequeue(Channel *channel)
     channel->head = channel->head->next;
     channel->size--;
 
-    // pthread_cond_signal(&channel->cond);
-    // pthread_mutex_unlock(&channel->mutex);
     signal_Notify(channel->signal);
 
     return result;
