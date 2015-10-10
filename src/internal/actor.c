@@ -41,7 +41,7 @@ actorMessageQueue_PushMessage(ActorMessageQueue *queue, void *message)
     return signal;
 }
 
-void *
+ChannelMessage *
 actorMessageQueue_PopMessage(ActorMessageQueue *queue)
 {
     return channel_Dequeue(queue->channel);
@@ -65,8 +65,12 @@ static void
 _actor_Run(Actor *actor)
 {
     for (;;) {
-        void *message = actorMessageQueue_PopMessage(actor->inputQueue);
-        actor->callback(actor->metadata, message);
+        ChannelMessage *message = actorMessageQueue_PopMessage(actor->inputQueue);
+        void *result = actor->callback(actor->metadata, message);
+
+        // TODO: the result is the output from executing the message at the actor,
+        // and it should be put into the ActorMessage struct (which contains the signal,
+        // message input, and message output)
     }
 }
 
@@ -80,6 +84,8 @@ actor_Start(Actor *actor)
 void
 actor_SendMessageAsync(Actor *actor, void *message)
 {
+    // We ignore the signal that's returned since we are not waiting
+    // for it to complete.
     actorMessageQueue_PushMessage(actor->inputQueue, message);
 }
 
@@ -88,6 +94,9 @@ actor_SendMessageSync(Actor *actor, void *message)
 {
     Signal *signal = actorMessageQueue_PushMessage(actor->inputQueue, message);
     signal_Wait(signal, NULL);
+
+    // caw: was here -- we need to get the response from the actor and return it here
+
     return NULL; // this should be the response we get back from the actor
 }
 

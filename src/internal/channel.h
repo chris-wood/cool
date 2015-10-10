@@ -4,6 +4,7 @@
 #include "signal.h"
 
 typedef struct channel Channel;
+typedef struct channel_message ChannelMessage;
 
 /**
  * Create a `ChannelNode` from a pointer to an arbitrary thing. It is expected
@@ -21,7 +22,7 @@ typedef struct channel Channel;
 Channel *channel_Create();
 void channel_Destroy(Channel **channelP);
 Signal *channel_Enqueue(Channel *channel, void *element);
-void *channel_Dequeue(Channel *channel);
+ChannelMessage *channel_Dequeue(Channel *channel);
 void *channel_GetAtIndex(Channel *channel, size_t index);
 void *channel_RemoveAtIndex(Channel *channel, void *element, size_t index);
 

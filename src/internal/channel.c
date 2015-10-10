@@ -3,20 +3,20 @@
 
 #include "channel.h"
 
-struct channel_entry;
+struct channel_message;
 
-struct channel_entry {
-    void *element;
-    struct channel_entry *next;
+struct channel_message {
+
+    void *input;
+    void *output;
+
+    struct channel_message *next;
     Signal *signal;
-
 };
 
-typedef struct channel_entry ChannelEntry;
-
 struct channel {
-    struct channel_entry *head;
-    struct channel_entry *tail;
+    struct channel_message *head;
+    struct channel_message *tail;
     size_t size;
     Signal *signal;
 
@@ -24,18 +24,19 @@ struct channel {
 };
 
 void
-channelEntry_Destroy(ChannelEntry **nodeP)
+channelEntry_Destroy(ChannelMessage **nodeP)
 {
-    ChannelEntry *result = (ChannelEntry *) *nodeP;
+    ChannelMessage *result = (ChannelMessage *) *nodeP;
     free(result);
     *nodeP = NULL;
 }
 
-ChannelEntry *
+ChannelMessage *
 channelEntry_Create(void *element)
 {
-    ChannelEntry *result = (ChannelEntry *) malloc(sizeof(ChannelEntry));
-    result->element = element;
+    ChannelMessage *result = (ChannelMessage *) malloc(sizeof(ChannelMessage));
+    result->input = element;
+    result->output = NULL;
     result->next = NULL;
     result->signal = signal_Create(result);
     return result;
@@ -58,9 +59,10 @@ channel_Destroy(Channel **channelP)
 {
     Channel *channel = (Channel *) *channelP;
 
-    ChannelEntry *current = channel->head;
+    ChannelMessage *current = channel->head;
     for (size_t i = 0; i < channel->size; i++) {
-        channel->delete(&(current->element));
+        channel->delete(&(current->input));
+        channel->delete(&(current->output));
         current = current->next;
     }
 
@@ -73,7 +75,7 @@ channel_Destroy(Channel **channelP)
 Signal *
 channel_Enqueue(Channel *channel, void *element)
 {
-    ChannelEntry *newNode = channelEntry_Create(element);
+    ChannelMessage *newNode = channelEntry_Create(element);
 
     signal_Lock(channel->signal);
 
@@ -97,34 +99,32 @@ channel_IsEmpty(Channel *channel)
     return channel->size == 0;
 }
 
-void *
+ChannelMessage *
 channel_Dequeue(Channel *channel)
 {
     signal_Wait(channel->signal, (int (*)(void *)) channel_IsEmpty);
 
-    ChannelEntry *target = channel->head;
-    void *result = target->element;
-    channelEntry_Destroy(&target);
+    ChannelMessage *target = channel->head;
 
     channel->head = channel->head->next;
     channel->size--;
 
     signal_Notify(channel->signal);
 
-    return result;
+    return target;
 }
 
 void *
 channel_GetAtIndex(Channel *channel, size_t index)
 {
-    ChannelEntry *element = NULL;
+    ChannelMessage *element = NULL;
 
     // pthread_mutex_lock(&channel->mutex);
     signal_Lock(channel->signal);
 
     index = (index % channel->size);
 
-    ChannelEntry *current = channel->head;
+    ChannelMessage *current = channel->head;
     size_t i = 0;
     while (i < index) {
         current = current->next;
@@ -152,13 +152,13 @@ channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
     } else {
 
         index = index % channel->size;
-        ChannelEntry *target = channel->head;
+        ChannelMessage *target = channel->head;
 
         if (index == 0) {
             channel->head = channel->head->next;
         } else {
             size_t i = 0;
-            ChannelEntry *prev = NULL;
+            ChannelMessage *prev = NULL;
 
             while (i < index) {
                 prev = target;
