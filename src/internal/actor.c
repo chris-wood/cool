@@ -70,7 +70,7 @@ _actor_Run(Actor *actor)
 
         // TODO: the result is the output from executing the message at the actor,
         // and it should be put into the ActorMessage struct (which contains the signal,
-        // message input, and message output)
+        // message input, and message output). then, trigger the callback
     }
 }
 
@@ -92,6 +92,8 @@ actor_SendMessageAsync(Actor *actor, void *message)
 void *
 actor_SendMessageSync(Actor *actor, void *message)
 {
+    // caw: push should return the channelmessage entry, from which we get the output and signal...
+
     Signal *signal = actorMessageQueue_PushMessage(actor->inputQueue, message);
     signal_Wait(signal, NULL);
 
