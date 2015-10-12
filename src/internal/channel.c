@@ -6,7 +6,6 @@
 struct channel_message;
 
 struct channel_message {
-
     void *input;
     void *output;
 
@@ -24,7 +23,7 @@ struct channel {
 };
 
 void
-channelEntry_Destroy(ChannelMessage **nodeP)
+channelMessage_Destroy(ChannelMessage **nodeP)
 {
     ChannelMessage *result = (ChannelMessage *) *nodeP;
     free(result);
@@ -32,7 +31,7 @@ channelEntry_Destroy(ChannelMessage **nodeP)
 }
 
 ChannelMessage *
-channelEntry_Create(void *element)
+channelMessage_Create(void *element)
 {
     ChannelMessage *result = (ChannelMessage *) malloc(sizeof(ChannelMessage));
     result->input = element;
@@ -72,10 +71,10 @@ channel_Destroy(Channel **channelP)
     *channelP = NULL;
 }
 
-Signal *
+ChannelMessage *
 channel_Enqueue(Channel *channel, void *element)
 {
-    ChannelMessage *newNode = channelEntry_Create(element);
+    ChannelMessage *newNode = channelMessage_Create(element);
 
     signal_Lock(channel->signal);
 
@@ -90,7 +89,7 @@ channel_Enqueue(Channel *channel, void *element)
 
     signal_Notify(channel->signal);
 
-    return newNode->signal;
+    return newNode;
 }
 
 int
@@ -119,7 +118,6 @@ channel_GetAtIndex(Channel *channel, size_t index)
 {
     ChannelMessage *element = NULL;
 
-    // pthread_mutex_lock(&channel->mutex);
     signal_Lock(channel->signal);
 
     index = (index % channel->size);
@@ -133,7 +131,6 @@ channel_GetAtIndex(Channel *channel, size_t index)
 
     element = current;
 
-    // pthread_mutex_unlock(&channel->mutex);
     signal_Unlock(channel->signal);
 
     return element;
@@ -179,4 +176,22 @@ channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
 
         return target;
     }
+}
+
+Signal *
+channelMessage_GetSignal(ChannelMessage *message)
+{
+    return message->signal;
+}
+
+void
+channelMessage_SetOutput(ChannelMessage *message, void *data)
+{
+    message->output = data;
+}
+
+void *
+channelMessage_GetOutput(ChannelMessage *message)
+{
+    return message->output;
 }

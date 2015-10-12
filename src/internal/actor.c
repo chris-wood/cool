@@ -92,14 +92,14 @@ actor_SendMessageAsync(Actor *actor, void *message)
 void *
 actor_SendMessageSync(Actor *actor, void *message)
 {
-    // caw: push should return the channelmessage entry, from which we get the output and signal...
+    ChannelMessage *channelMessage = actorMessageQueue_PushMessage(actor->inputQueue, message);
 
-    Signal *signal = actorMessageQueue_PushMessage(actor->inputQueue, message);
+    Signal *signal = channelMessage_GetSignal(channelMessage);
     signal_Wait(signal, NULL);
 
-    // caw: was here -- we need to get the response from the actor and return it here
+    void *output = channelMessage_GetOutput(channelMessage);
 
-    return NULL; // this should be the response we get back from the actor
+    return output;
 }
 
 ActorID
