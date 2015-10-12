@@ -139,11 +139,9 @@ channel_GetAtIndex(Channel *channel, size_t index)
 void *
 channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
 {
-    // pthread_mutex_lock(&channel->mutex);
     signal_Lock(channel->signal);
 
     if (channel->head == NULL) {
-        // pthread_mutex_unlock(&channel->mutex);
         signal_Unlock(channel->signal);
         return NULL;
     } else {
@@ -171,7 +169,6 @@ channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
 
         channel->size--;
 
-        // pthread_mutex_unlock(&channel->mutex);
         signal_Unlock(channel->signal);
 
         return target;

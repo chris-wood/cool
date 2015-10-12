@@ -34,11 +34,11 @@ actorMessageQueue_Create()
     return queue;
 }
 
-Signal *
+ChannelMessage *
 actorMessageQueue_PushMessage(ActorMessageQueue *queue, void *message)
 {
-    Signal *signal = channel_Enqueue(queue->channel, message);
-    return signal;
+    ChannelMessage *insertedMessage = channel_Enqueue(queue->channel, message);
+    return insertedMessage;
 }
 
 ChannelMessage *
@@ -67,10 +67,8 @@ _actor_Run(Actor *actor)
     for (;;) {
         ChannelMessage *message = actorMessageQueue_PopMessage(actor->inputQueue);
         void *result = actor->callback(actor->metadata, message);
-
-        // TODO: the result is the output from executing the message at the actor,
-        // and it should be put into the ActorMessage struct (which contains the signal,
-        // message input, and message output). then, trigger the callback
+        channelMessage_SetOutput(message, result);
+        signal_Notify(channelMessage_GetSignal(message));
     }
 }
 
