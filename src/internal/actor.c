@@ -48,7 +48,7 @@ actorMessageQueue_PopMessage(ActorMessageQueue *queue)
 }
 
 Actor *
-actor_Create(void *callbackMetadata, void *(*callback)(void *, void *))
+actor_CreateLocal(void *callbackMetadata, void *(*callback)(void *, void *))
 {
     Actor *actor = (Actor *) malloc(sizeof(Actor));
     volatile size_t inc = 1;
