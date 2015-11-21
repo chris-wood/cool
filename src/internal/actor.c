@@ -10,11 +10,6 @@ typedef struct actor_message_queue ActorMessageQueue;
 
 static size_t _actorId;
 
-struct actor_message {
-    ActorID sender;
-    ActorID receiver;
-};
-
 struct actor_message_queue {
     Channel *channel;
 };
@@ -27,7 +22,7 @@ struct actor {
 };
 
 ActorMessageQueue *
-actorMessageQueue_Create()
+ActorMessageQueue_Create()
 {
     ActorMessageQueue *queue = (ActorMessageQueue *) malloc(sizeof(ActorMessageQueue));
     queue->channel = channel_Create();
@@ -35,29 +30,37 @@ actorMessageQueue_Create()
 }
 
 ChannelMessage *
-actorMessageQueue_PushMessage(ActorMessageQueue *queue, void *message)
+ActorMessageQueue_PushMessage(ActorMessageQueue *queue, void *message)
 {
     ChannelMessage *insertedMessage = channel_Enqueue(queue->channel, message);
     return insertedMessage;
 }
 
 ChannelMessage *
-actorMessageQueue_PopMessage(ActorMessageQueue *queue)
+ActorMessageQueue_PopMessage(ActorMessageQueue *queue)
 {
     return channel_Dequeue(queue->channel);
 }
 
 Actor *
-actor_Create(void *callbackMetadata, void *(*callback)(void *, void *))
+actor_CreateLocal(void *callbackMetadata, void *(*callback)(void *, void *))
 {
     Actor *actor = (Actor *) malloc(sizeof(Actor));
     volatile size_t inc = 1;
 
     actor->id = __sync_fetch_and_add(&_actorId, inc);
-    actor->inputQueue = actorMessageQueue_Create();
+    actor->inputQueue = ActorMessageQueue_Create();
     actor->callback = callback;
     actor->metadata = callbackMetadata;
 
+    return actor;
+}
+
+Actor *
+actor_CreateGlobal(char *name, void *callbackMetadata, void *(*callback)(void *, void *))
+{
+    Actor *actor = actor_CreateLocal(callbackMetadata, callback);
+    // actor->producer = TODO: producer portal here!
     return actor;
 }
 
@@ -65,7 +68,7 @@ static void
 _actor_Run(Actor *actor)
 {
     for (;;) {
-        ChannelMessage *message = actorMessageQueue_PopMessage(actor->inputQueue);
+        ChannelMessage *message = ActorMessageQueue_PopMessage(actor->inputQueue);
         void *result = actor->callback(actor->metadata, message);
         channelMessage_SetOutput(message, result);
         signal_Notify(channelMessage_GetSignal(message));
@@ -84,13 +87,13 @@ actor_SendMessageAsync(Actor *actor, void *message)
 {
     // We ignore the signal that's returned since we are not waiting
     // for it to complete.
-    actorMessageQueue_PushMessage(actor->inputQueue, message);
+    ActorMessageQueue_PushMessage(actor->inputQueue, message);
 }
 
 void *
 actor_SendMessageSync(Actor *actor, void *message)
 {
-    ChannelMessage *channelMessage = actorMessageQueue_PushMessage(actor->inputQueue, message);
+    ChannelMessage *channelMessage = ActorMessageQueue_PushMessage(actor->inputQueue, message);
 
     Signal *signal = channelMessage_GetSignal(channelMessage);
     signal_Wait(signal, NULL);
