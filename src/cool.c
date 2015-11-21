@@ -1134,9 +1134,11 @@ builtin_SendAsync(Environment *env, Value *val)
 
     if (actorWrapper->type == CoolValue_Actor) {
         actor_SendMessageAsync(actorWrapper->actor, val->cell[1]);
-    } else if (actorWrapper->type == CoolValue_Error) {
-        // TODO: issue an interest
-        printf("Actor not found locally -- think outside the box.\n");
+    } else if (actorWrapper->type == CoolValue_Actor) {
+        // TODO: this is where we would expect to issue an interest... but is that the correct behavior?
+        // 1. ***environment has default remote actor that we reference here -- use this one for now.
+        // 2. environment_Get returns default actor for not found symbols
+        // 3. ???
     } else {
         return value_Error("Invalid type returned when indexing into the Actor\n");
     }
@@ -1155,15 +1157,12 @@ builtin_SendSync(Environment *env, Value *val)
     Value *actorWrapper = environment_Get(env, lookupSymbol);
 
     if (actorWrapper->type == CoolValue_Actor) {
-        actor_SendMessageSync(actorWrapper->actor, val->cell[1]);
-    } else if (actorWrapper->type == CoolValue_Error) {
-        // TODO: issue a blocking interest
-        printf("Actor not found locally -- think outside the box.\n");
+        return (Value *) actor_SendMessageSync(actorWrapper->actor, val->cell[1]);
+    } else if (actorWrapper->type == CoolValue_Actor) {
+
     } else {
         return value_Error("Invalid type returned when indexing into the Actor\n");
     }
-
-    return value_SExpr();
 }
 
 Value *

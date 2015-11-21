@@ -5,7 +5,7 @@
 
 #include "../actor.c"
 
-static void test_actor_Create(void **state) {
+static void test_actor_CreateLocal(void **state) {
     // assert_true(env != NULL);
 }
 
@@ -13,7 +13,7 @@ int
 main(int argc, char **argv)
 {
     const struct CMUnitTest tests[] = {
-        cmocka_unit_test(test_actor_Create)
+        cmocka_unit_test(test_actor_CreateLocal)
     };
 
     return cmocka_run_group_tests(tests, NULL, NULL);

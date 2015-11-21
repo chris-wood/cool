@@ -8,6 +8,7 @@ typedef struct actor Actor;
 
 Actor *actor_CreateLocal(void *metadata, void *(*callback)(void *metadata, void *message));
 Actor *actor_CreateGlobal(char *name, void *metadata, void *(*callback)(void *metadata, void *message));
+
 void actor_Start(Actor *actor);
 void actor_SendMessageAsync(Actor *actor, void *message);
 void *actor_SendMessageSync(Actor *actor, void *message);
