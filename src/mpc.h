@@ -189,7 +189,7 @@ mpc_parser_t *mpc_whole(mpc_parser_t *a, mpc_dtor_t da);
 mpc_parser_t *mpc_stripl(mpc_parser_t *a);
 mpc_parser_t *mpc_stripr(mpc_parser_t *a);
 mpc_parser_t *mpc_strip(mpc_parser_t *a);
-mpc_parser_t *mpc_tok(mpc_parser_t *a); 
+mpc_parser_t *mpc_tok(mpc_parser_t *a);
 mpc_parser_t *mpc_sym(const char *s);
 mpc_parser_t *mpc_total(mpc_parser_t *a, mpc_dtor_t da);
 
@@ -250,7 +250,7 @@ mpc_val_t *mpcf_maths(int n, mpc_val_t** xs);
 */
 
 mpc_parser_t *mpc_re(const char *re);
-  
+
 /*
 ** AST
 */
@@ -320,8 +320,8 @@ mpc_err_t *mpca_lang_contents(int flags, const char *filename, ...);
 void mpc_print(mpc_parser_t *p);
 
 int mpc_test_pass(mpc_parser_t *p, const char *s, const void *d,
-  int(*tester)(const void*, const void*), 
-  mpc_dtor_t destructor, 
+  int(*tester)(const void*, const void*),
+  mpc_dtor_t destructor,
   void(*printer)(const void*));
 
 int mpc_test_fail(mpc_parser_t *p, const char *s, const void *d,

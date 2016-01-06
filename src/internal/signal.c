@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
 
@@ -7,7 +8,10 @@ struct signal {
     void *context;
     pthread_mutex_t mutex;
     pthread_cond_t cond;
+    long id;
 };
+
+static long _signalId = 0;
 
 Signal *
 signal_Create(void *context)
@@ -15,6 +19,7 @@ signal_Create(void *context)
     Signal *result = (Signal *) malloc(sizeof(Signal));
 
     result->context = context;
+    result->id = _signalId++;
     pthread_mutex_init(&result->mutex, NULL);
     pthread_cond_init(&result->cond, NULL);
 
@@ -24,43 +29,47 @@ signal_Create(void *context)
 void
 signal_Destroy(Signal **signalP)
 {
-    Signal *signal = (Signal *) *signalP;
-    pthread_mutex_destroy(&signal->mutex);
-    pthread_cond_destroy(&signal->cond);
+    Signal *thesignal = (Signal *) *signalP;
+    pthread_mutex_destroy(&thesignal->mutex);
+    pthread_cond_destroy(&thesignal->cond);
 
-    free(signal);
+    free(thesignal);
     *signalP = NULL;
 }
 
 void
-signal_Lock(Signal *signal)
+signal_Lock(Signal *thesignal)
 {
-    pthread_mutex_lock(&signal->mutex);
+    // printf("locking condition %u\n", thesignal->id);
+    pthread_mutex_lock(&thesignal->mutex);
 }
 
 void
-signal_Unlock(Signal *signal)
+signal_Unlock(Signal *thesignal)
 {
-    pthread_mutex_unlock(&signal->mutex);
+    // printf("unlocking condition %u\n", thesignal->id);
+    pthread_mutex_unlock(&thesignal->mutex);
 }
 
 void
-signal_Wait(Signal *signal, int (*condition)(void *state))
+signal_Notify(Signal *thesignal)
 {
-    pthread_mutex_lock(&signal->mutex);
+    // printf("setting condition %u\n", thesignal->id);
+    pthread_cond_signal(&thesignal->cond);
+}
+
+void
+signal_Wait(Signal *thesignal, int (*condition)(void *state))
+{
+    // printf("I've been unlocked %u\n", thesignal->id);
 
     if (condition != NULL) {
-        while (condition(signal->context) >= 1) {
-            pthread_cond_wait(&(signal->cond), &(signal->mutex));
+        while (condition(thesignal->context) >= 1) {
+            pthread_cond_wait(&(thesignal->cond), &(thesignal->mutex));
         }
     } else {
-        pthread_cond_wait(&(signal->cond), &(signal->mutex));
+        // printf("waiting on condition %u\n", thesignal->id);
+        pthread_cond_wait(&(thesignal->cond), &(thesignal->mutex));
+        // printf("cond released %u\n", thesignal->id);
     }
-}
-
-void
-signal_Notify(Signal *signal)
-{
-    pthread_cond_signal(&signal->cond);
-    pthread_mutex_unlock(&signal->mutex);
 }

@@ -7,6 +7,7 @@
 
 #include "cool.h"
 #include "internal/actor.h"
+#include "internal/buffer.h"
 
 #define FILE_BLOCK_SIZE 128
 
@@ -268,7 +269,8 @@ value_Lambda(Value *formals, Value *body)
 
 Value *
 value_FunctionWrapper(EvaluateWrapper *wrapper, Value *parameters) {
-    Value *result = value_Call(wrapper->env, wrapper->param, parameters);
+    Value *functionBody = value_Copy(wrapper->param);
+    Value *result = value_Call(wrapper->env, functionBody, parameters); // function invocation
     return result;
 }
 
@@ -306,6 +308,24 @@ value_ActorGlobal(Environment *env, Value *function, char *name)
     return value;
 }
 
+Value *
+value_Error(char *fmt, ...)
+{
+    Value *value = (Value *) malloc(sizeof(Value));
+    value->type = CoolValue_Error;
+
+    va_list va;
+    va_start(va, fmt);
+
+    value->errorString = (char *) malloc(512); // arbitrary for all error strings (more than needed)
+    vsnprintf(value->errorString, 511, fmt, va);
+
+    value->errorString = (char *) realloc(value->errorString, strlen(value->errorString) + 1);
+    va_end(va);
+
+    return value;
+}
+
 char *
 value_TypeString(int type)
 {
@@ -334,22 +354,16 @@ value_TypeString(int type)
     }
 }
 
-Value *
-value_Error(char *fmt, ...)
+CBuffer *
+value_Serialize(Value *value, CBuffer *buffer)
 {
-    Value *value = (Value *) malloc(sizeof(Value));
-    value->type = CoolValue_Error;
+    return buffer;
+}
 
-    va_list va;
-    va_start(va, fmt);
+void
+value_Deserialize(Value *value)
+{
 
-    value->errorString = (char *) malloc(512); // arbitrary for all error strings (more than needed)
-    vsnprintf(value->errorString, 511, fmt, va);
-
-    value->errorString = (char *) realloc(value->errorString, strlen(value->errorString) + 1);
-    va_end(va);
-
-    return value;
 }
 
 Value *
@@ -1121,6 +1135,7 @@ builtin_Operator(Environment *env, Value *expr, char* op)
     return x;
 }
 
+// TODO: this needs to change to accept a third parameter -- the callback function (which is invoked when the result is returned)
 Value *
 builtin_SendAsync(Environment *env, Value *val)
 {
@@ -1157,9 +1172,8 @@ builtin_SendSync(Environment *env, Value *val)
     Value *actorWrapper = environment_Get(env, lookupSymbol);
 
     if (actorWrapper->type == CoolValue_Actor) {
-        return (Value *) actor_SendMessageSync(actorWrapper->actor, val->cell[1]);
-    } else if (actorWrapper->type == CoolValue_Actor) {
-
+        Value *result = (Value *) actor_SendMessageSync(actorWrapper->actor, val->cell[1]);
+        return result;
     } else {
         return value_Error("Invalid type returned when indexing into the Actor\n");
     }
@@ -1286,7 +1300,6 @@ Value *
 value_EvaluateExpressionWrapper(EvaluateWrapper *wrapper)
 {
     Value *result = value_EvaluateExpression(wrapper->env, wrapper->param);
-    value_Println(stdout, result);
     return result;
 }
 

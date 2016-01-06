@@ -26,3 +26,8 @@
 ;        {0}
 ;        {+ 1 (len (tail l))}
 ;})
+
+;; Examples
+; run (print 1)
+; spawn "adder" (\ {x y} {+ x y})
+; print (<- "adder" {1 2})

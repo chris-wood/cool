@@ -2,7 +2,7 @@ CC=gcc
 CFLAGS=-std=c99 -Wall -ftest-coverage -fprofile-arcs
 LIBRARIES=-ledit -lgmp -lm
 
-INTERNAL_SOURCE=internal/actor.c internal/channel.c internal/signal.c
+INTERNAL_SOURCE=internal/actor.c internal/channel.c internal/signal.c internal/buffer.c
 
 all: libcool cool
 

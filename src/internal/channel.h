@@ -21,13 +21,17 @@ typedef struct channel_message ChannelMessage;
  */
 Channel *channel_Create();
 void channel_Destroy(Channel **channelP);
-ChannelMessage *channel_Enqueue(Channel *channel, void *element);
+
+ChannelMessage *channelMessage_Create(void *element);
+ChannelMessage *channel_Enqueue(Channel *channel, ChannelMessage *element);
 ChannelMessage *channel_Dequeue(Channel *channel);
-void *channel_GetAtIndex(Channel *channel, size_t index);
-void *channel_RemoveAtIndex(Channel *channel, void *element, size_t index);
+
+// void *channel_GetAtIndex(Channel *channel, size_t index);
+// void *channel_RemoveAtIndex(Channel *channel, void *element, size_t index);
 
 Signal *channelMessage_GetSignal(ChannelMessage *message);
 void channelMessage_SetOutput(ChannelMessage *message, void *data);
 void *channelMessage_GetOutput(ChannelMessage *message);
+void *channelMessage_GetPayload(ChannelMessage *message);
 
 #endif // libcool_internal_channel_

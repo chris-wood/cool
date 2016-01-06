@@ -72,10 +72,8 @@ channel_Destroy(Channel **channelP)
 }
 
 ChannelMessage *
-channel_Enqueue(Channel *channel, void *element)
+channel_Enqueue(Channel *channel, ChannelMessage *newNode)
 {
-    ChannelMessage *newNode = channelMessage_Create(element);
-
     signal_Lock(channel->signal);
 
     if (channel->head == NULL || channel->tail == NULL) {
@@ -88,6 +86,7 @@ channel_Enqueue(Channel *channel, void *element)
     channel->size++;
 
     signal_Notify(channel->signal);
+    signal_Unlock(channel->signal);
 
     return newNode;
 }
@@ -101,14 +100,19 @@ channel_IsEmpty(Channel *channel)
 ChannelMessage *
 channel_Dequeue(Channel *channel)
 {
-    signal_Wait(channel->signal, (int (*)(void *)) channel_IsEmpty);
+    signal_Lock(channel->signal);
+
+    while (channel_IsEmpty(channel)) {
+        signal_Wait(channel->signal, NULL);
+    }
+    // signal_Wait(channel->signal, (int (*)(void *)) channel_IsEmpty);
 
     ChannelMessage *target = channel->head;
 
     channel->head = channel->head->next;
     channel->size--;
 
-    signal_Notify(channel->signal);
+    signal_Unlock(channel->signal);
 
     return target;
 }
@@ -191,4 +195,10 @@ void *
 channelMessage_GetOutput(ChannelMessage *message)
 {
     return message->output;
+}
+
+void *
+channelMessage_GetPayload(ChannelMessage *message)
+{
+    return message->input;
 }

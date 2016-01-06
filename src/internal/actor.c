@@ -5,6 +5,7 @@
 #include "../cool_types.h"
 #include "channel.h"
 #include "actor.h"
+#include "ccn/ccn_producer.h"
 
 typedef struct actor_message_queue ActorMessageQueue;
 
@@ -14,12 +15,53 @@ struct actor_message_queue {
     Channel *channel;
 };
 
-struct actor {
-    ActorID id;
+struct local_actor {
     ActorMessageQueue *inputQueue;
     void *(*callback)(void *metadata, void *message);
     void *metadata;
 };
+typedef struct local_actor LocalActor;
+
+struct global_actor {
+    Actor *actor;
+    ProducerPortal *portal;
+};
+typedef struct global_actor GlobalActor;
+
+struct actor {
+    void *instance;
+    ActorInterface *interface;
+    ActorID id;
+};
+
+static void *localActor_SendMessageSync(LocalActor *actor, void *message);
+static void localActor_SendMessageAsync(LocalActor *actor, void *message);
+static void localActor_Start(LocalActor *actor);
+static void localActor_Run(LocalActor *actor);
+
+ActorInterface *LocalActorInterface = &(ActorInterface) {
+    .start = (void (*)(void *)) localActor_Start,
+    .getID = (ActorID (*)(void *)) actor_GetID,
+    .sendMessageAsync = (void (*)(void *, void *)) localActor_SendMessageAsync,
+    .sendMessageSync = (void *(*)(void *, void *)) localActor_SendMessageSync
+};
+
+ActorInterface *LocalActorInterface = &(ActorInterface) {
+    .start = (void (*)(void *)) globalActor_Start,
+    .getID = (ActorID (*)(void *)) actor_GetID,
+    .sendMessageAsync = (void (*)(void *, void *)) globalActor_SendMessageAsync,
+    .sendMessageSync = (void *(*)(void *, void *)) globalActor_SendMessageSync
+};
+
+// TODO: implement this generic actor interface
+// typedef struct actor_implementation {
+//     void *instance;
+//
+//     void (*start)(void);
+//     void (*sendMessageAsync)(void);
+//     void *(*sendMessageAsync)(void);
+//     ActorID (*getID)(void);
+// } ActorImplementation;
 
 ActorMessageQueue *
 ActorMessageQueue_Create()
@@ -30,7 +72,7 @@ ActorMessageQueue_Create()
 }
 
 ChannelMessage *
-ActorMessageQueue_PushMessage(ActorMessageQueue *queue, void *message)
+ActorMessageQueue_PushMessage(ActorMessageQueue *queue, ChannelMessage *message)
 {
     ChannelMessage *insertedMessage = channel_Enqueue(queue->channel, message);
     return insertedMessage;
@@ -48,10 +90,15 @@ actor_CreateLocal(void *callbackMetadata, void *(*callback)(void *, void *))
     Actor *actor = (Actor *) malloc(sizeof(Actor));
     volatile size_t inc = 1;
 
+    LocalActor *localActor = (LocalActor *) malloc(sizeof(LocalActor));
+
+    localActor->inputQueue = ActorMessageQueue_Create();
+    localActor->callback = callback;
+    localActor->metadata = callbackMetadata;
+
     actor->id = __sync_fetch_and_add(&_actorId, inc);
-    actor->inputQueue = ActorMessageQueue_Create();
-    actor->callback = callback;
-    actor->metadata = callbackMetadata;
+    actor->instance = (void *) localActor;
+    actor->interface = LocalActorInterface;
 
     return actor;
 }
@@ -60,43 +107,74 @@ Actor *
 actor_CreateGlobal(char *name, void *callbackMetadata, void *(*callback)(void *, void *))
 {
     Actor *actor = actor_CreateLocal(callbackMetadata, callback);
-    // actor->producer = TODO: producer portal here!
-    return actor;
+    // actor->producer = producerPortal_Create(name);
+
+    // return actor;
+    return NULL;
 }
 
 static void
-_actor_Run(Actor *actor)
+localActor_Run(LocalActor *actor)
 {
     for (;;) {
         ChannelMessage *message = ActorMessageQueue_PopMessage(actor->inputQueue);
-        void *result = actor->callback(actor->metadata, message);
+        Signal *thesignal = channelMessage_GetSignal(message);
+
+        signal_Lock(thesignal);
+        void *result = actor->callback(actor->metadata, channelMessage_GetPayload(message));
+
         channelMessage_SetOutput(message, result);
-        signal_Notify(channelMessage_GetSignal(message));
+        signal_Notify(thesignal);
+        signal_Unlock(thesignal);
+    }
+}
+
+static void
+globalActor_Run(LocalActor *actor)
+{
+    for (;;) {
+        // TODO
     }
 }
 
 void
-actor_Start(Actor *actor)
+localActor_Start(LocalActor *actor)
 {
     pthread_t *t = (pthread_t *) malloc(sizeof(pthread_t));
-    pthread_create(t, NULL, (void *) &_actor_Run, (void *) actor);
+    pthread_create(t, NULL, (void *) &localActor_Run, (void *) actor);
 }
 
 void
-actor_SendMessageAsync(Actor *actor, void *message)
+globalActor_Start(GlobalActor *actor)
+{
+    pthread_t *t = (pthread_t *) malloc(sizeof(pthread_t));
+    pthread_create(t, NULL, (void *) &globalActor_Run, (void *) actor);
+}
+
+// TODO: this should take a callback as an argument, obviously.
+void
+localActor_SendMessageAsync(LocalActor *actor, void *message)
 {
     // We ignore the signal that's returned since we are not waiting
     // for it to complete.
-    ActorMessageQueue_PushMessage(actor->inputQueue, message);
+    ChannelMessage *channelMessage = channelMessage_Create(message);
+    Signal *thesignal = channelMessage_GetSignal(channelMessage);
+    signal_Lock(thesignal);
+    ActorMessageQueue_PushMessage(actor->inputQueue, channelMessage);
+    signal_Unlock(thesignal);
 }
 
 void *
-actor_SendMessageSync(Actor *actor, void *message)
+localActor_SendMessageSync(LocalActor *actor, void *message)
 {
-    ChannelMessage *channelMessage = ActorMessageQueue_PushMessage(actor->inputQueue, message);
+    ChannelMessage *channelMessage = channelMessage_Create(message);
+    Signal *thesignal = channelMessage_GetSignal(channelMessage);
+    signal_Lock(thesignal);
 
-    Signal *signal = channelMessage_GetSignal(channelMessage);
-    signal_Wait(signal, NULL);
+    channelMessage = ActorMessageQueue_PushMessage(actor->inputQueue, channelMessage);
+
+    signal_Wait(thesignal, NULL);
+    signal_Unlock(thesignal);
 
     void *output = channelMessage_GetOutput(channelMessage);
 
@@ -107,4 +185,22 @@ ActorID
 actor_GetID(const Actor *actor)
 {
     return actor->id;
+}
+
+void
+actor_Start(Actor *actor)
+{
+    actor->interface->start(actor->instance);
+}
+
+void
+actor_SendMessageAsync(Actor *actor, void *message)
+{
+    actor->interface->sendMessageAsync(actor->instance, message);
+}
+
+void *
+actor_SendMessageSync(Actor *actor, void *message)
+{
+    return actor->interface->sendMessageSync(actor->instance, message);
 }

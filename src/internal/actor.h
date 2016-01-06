@@ -6,6 +6,13 @@
 typedef size_t ActorID;
 typedef struct actor Actor;
 
+typedef struct actor_implementation {
+    void (*start)(void *);
+    void (*sendMessageAsync)(void *, void *);
+    void *(*sendMessageSync)(void *, void *);
+    ActorID (*getID)(void *);
+} ActorInterface;
+
 Actor *actor_CreateLocal(void *metadata, void *(*callback)(void *metadata, void *message));
 Actor *actor_CreateGlobal(char *name, void *metadata, void *(*callback)(void *metadata, void *message));
 
