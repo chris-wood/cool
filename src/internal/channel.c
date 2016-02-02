@@ -6,8 +6,8 @@
 struct channel_message;
 
 struct channel_message {
-    void *input;
-    void *output;
+    cJSON *input;
+    cJSON *output;
 
     struct channel_message *next;
     Signal *signal;
@@ -19,7 +19,7 @@ struct channel {
     size_t size;
     Signal *signal;
 
-    void (*delete)(void **element);
+    void (*delete)(cJSON **element);
 };
 
 void
@@ -31,7 +31,7 @@ channelMessage_Destroy(ChannelMessage **nodeP)
 }
 
 ChannelMessage *
-channelMessage_Create(void *element)
+channelMessage_Create(cJSON *element)
 {
     ChannelMessage *result = (ChannelMessage *) malloc(sizeof(ChannelMessage));
     result->input = element;
@@ -42,7 +42,7 @@ channelMessage_Create(void *element)
 }
 
 Channel *
-channel_Create(void (*delete)(void **element))
+channel_Create(void (*delete)(cJSON **element))
 {
     Channel *result = (Channel *) malloc(sizeof(Channel));
     result->size = 0;
@@ -117,67 +117,67 @@ channel_Dequeue(Channel *channel)
     return target;
 }
 
-void *
-channel_GetAtIndex(Channel *channel, size_t index)
-{
-    ChannelMessage *element = NULL;
-
-    signal_Lock(channel->signal);
-
-    index = (index % channel->size);
-
-    ChannelMessage *current = channel->head;
-    size_t i = 0;
-    while (i < index) {
-        current = current->next;
-        i++;
-    }
-
-    element = current;
-
-    signal_Unlock(channel->signal);
-
-    return element;
-}
-
-void *
-channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
-{
-    signal_Lock(channel->signal);
-
-    if (channel->head == NULL) {
-        signal_Unlock(channel->signal);
-        return NULL;
-    } else {
-
-        index = index % channel->size;
-        ChannelMessage *target = channel->head;
-
-        if (index == 0) {
-            channel->head = channel->head->next;
-        } else {
-            size_t i = 0;
-            ChannelMessage *prev = NULL;
-
-            while (i < index) {
-                prev = target;
-                target = target->next;
-                i++;
-            }
-            prev->next = target->next;
-
-            if (index == (channel->size - 1)) {
-                channel->tail = prev; // move back
-            }
-        }
-
-        channel->size--;
-
-        signal_Unlock(channel->signal);
-
-        return target;
-    }
-}
+// void *
+// channel_GetAtIndex(Channel *channel, size_t index)
+// {
+//     ChannelMessage *element = NULL;
+//
+//     signal_Lock(channel->signal);
+//
+//     index = (index % channel->size);
+//
+//     ChannelMessage *current = channel->head;
+//     size_t i = 0;
+//     while (i < index) {
+//         current = current->next;
+//         i++;
+//     }
+//
+//     element = current;
+//
+//     signal_Unlock(channel->signal);
+//
+//     return element;
+// }
+//
+// void *
+// channel_RemoveAtIndex(Channel *channel, void *element, size_t index)
+// {
+//     signal_Lock(channel->signal);
+//
+//     if (channel->head == NULL) {
+//         signal_Unlock(channel->signal);
+//         return NULL;
+//     } else {
+//
+//         index = index % channel->size;
+//         ChannelMessage *target = channel->head;
+//
+//         if (index == 0) {
+//             channel->head = channel->head->next;
+//         } else {
+//             size_t i = 0;
+//             ChannelMessage *prev = NULL;
+//
+//             while (i < index) {
+//                 prev = target;
+//                 target = target->next;
+//                 i++;
+//             }
+//             prev->next = target->next;
+//
+//             if (index == (channel->size - 1)) {
+//                 channel->tail = prev; // move back
+//             }
+//         }
+//
+//         channel->size--;
+//
+//         signal_Unlock(channel->signal);
+//
+//         return target;
+//     }
+// }
 
 Signal *
 channelMessage_GetSignal(ChannelMessage *message)
@@ -186,18 +186,18 @@ channelMessage_GetSignal(ChannelMessage *message)
 }
 
 void
-channelMessage_SetOutput(ChannelMessage *message, void *data)
+channelMessage_SetOutput(ChannelMessage *message, cJSON *data)
 {
     message->output = data;
 }
 
-void *
+cJSON *
 channelMessage_GetOutput(ChannelMessage *message)
 {
     return message->output;
 }
 
-void *
+cJSON *
 channelMessage_GetPayload(ChannelMessage *message)
 {
     return message->input;

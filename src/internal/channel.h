@@ -2,6 +2,7 @@
 #define libcool_internal_channel_
 
 #include "signal.h"
+#include "encoding/cJSON.h"
 
 typedef struct channel Channel;
 typedef struct channel_message ChannelMessage;
@@ -22,7 +23,7 @@ typedef struct channel_message ChannelMessage;
 Channel *channel_Create();
 void channel_Destroy(Channel **channelP);
 
-ChannelMessage *channelMessage_Create(void *element);
+ChannelMessage *channelMessage_Create(cJSON *element);
 ChannelMessage *channel_Enqueue(Channel *channel, ChannelMessage *element);
 ChannelMessage *channel_Dequeue(Channel *channel);
 
@@ -30,8 +31,8 @@ ChannelMessage *channel_Dequeue(Channel *channel);
 // void *channel_RemoveAtIndex(Channel *channel, void *element, size_t index);
 
 Signal *channelMessage_GetSignal(ChannelMessage *message);
-void channelMessage_SetOutput(ChannelMessage *message, void *data);
-void *channelMessage_GetOutput(ChannelMessage *message);
-void *channelMessage_GetPayload(ChannelMessage *message);
+void channelMessage_SetOutput(ChannelMessage *message, cJSON *data);
+cJSON *channelMessage_GetOutput(ChannelMessage *message);
+cJSON *channelMessage_GetPayload(ChannelMessage *message);
 
 #endif // libcool_internal_channel_
