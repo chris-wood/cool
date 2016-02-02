@@ -8,6 +8,7 @@
 #include "cool.h"
 #include "internal/actor.h"
 #include "internal/buffer.h"
+#include "internal/encoding/cJSON.h"
 
 #define FILE_BLOCK_SIZE 128
 
@@ -63,6 +64,8 @@ Value *builtin_Eval(Environment *env, Value *x);
 Value *builtin_List(Environment *env, Value *x);
 Value *value_EvaluateExpression(Environment *env, Value *value);
 Value *value_Call(Environment *env, Value *function, Value *x);
+cJSON *value_ToJSON(Value *value);
+Value *value_FromJSON(cJSON *json);
 
 #define CASSERT(args, cond, fmt, ...) \
     if (!(cond)) { \
@@ -267,11 +270,14 @@ value_Lambda(Value *formals, Value *body)
     return value;
 }
 
-Value *
-value_FunctionWrapper(EvaluateWrapper *wrapper, Value *parameters) {
+cJSON *
+value_FunctionWrapper(EvaluateWrapper *wrapper, cJSON *encodedParameters) {
+    printf("%s\n", cJSON_Print(encodedParameters));
+    Value *parameters = value_FromJSON(encodedParameters);
     Value *functionBody = value_Copy(wrapper->param);
     Value *result = value_Call(wrapper->env, functionBody, parameters); // function invocation
-    return result;
+    cJSON *encodedResult = value_ToJSON(result);
+    return encodedResult;
 }
 
 Value *
@@ -286,7 +292,7 @@ value_ActorLocal(Environment *env, Value *function)
     EvaluateWrapper *wrapper = (EvaluateWrapper *) malloc(sizeof(EvaluateWrapper));
     wrapper->env = value->env;
     wrapper->param = value_Copy(function);
-    value->actor = actor_CreateLocal((void *) wrapper, (void *(*)(void *, void *)) value_FunctionWrapper);
+    value->actor = actor_CreateLocal((void *) wrapper, (cJSON *(*)(void *, cJSON *)) value_FunctionWrapper);
 
     return value;
 }
@@ -303,7 +309,7 @@ value_ActorGlobal(Environment *env, Value *function, char *name)
     EvaluateWrapper *wrapper = (EvaluateWrapper *) malloc(sizeof(EvaluateWrapper));
     wrapper->env = value->env;
     wrapper->param = value_Copy(function);
-    value->actor = actor_CreateGlobal(name, (void *) wrapper, (void *(*)(void *, void *)) value_FunctionWrapper);
+    value->actor = actor_CreateGlobal(name, (void *) wrapper, (cJSON *(*)(void *, cJSON *)) value_FunctionWrapper);
 
     return value;
 }
@@ -354,16 +360,140 @@ value_TypeString(int type)
     }
 }
 
-CBuffer *
-value_Serialize(Value *value, CBuffer *buffer)
+cJSON *
+value_ToJSON(Value *value)
 {
-    return buffer;
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "type", value_GetType(value));
+
+    switch (value->type) {
+        case CoolValue_Error:
+
+            // return "CoolValue_Error";
+            break;
+        case CoolValue_Function:
+
+            // return "CoolValue_Function";
+            break;
+        case CoolValue_Qexpr:
+        case CoolValue_Sexpr: {
+                cJSON *list = cJSON_CreateArray();
+                for (int i = 0; i < value->count; i++) {
+                    cJSON *jsonForm = value_ToJSON(value->cell[i]);
+                    cJSON_AddItemToArray(list, jsonForm);
+                    // TODO: is this a leak?...
+                }
+                cJSON_AddItemToObject(root, "value", list);
+                break;
+            }
+        case CoolValue_Integer: {
+                char *stringForm = mpz_get_str(NULL, 2, value->bignumber);
+                cJSON_AddItemToObject(root, "value", cJSON_CreateString(stringForm));
+                free(stringForm);
+
+                break;
+            }
+        case CoolValue_Double:
+
+            // return "CoolValue_Double";
+            break;
+        case CoolValue_Byte:
+
+            // return "CoolValue_Byte";
+            break;
+        case CoolValue_String:
+
+            // return "CoolValue_String";
+            break;
+        case CoolValue_Actor:
+
+            // return "CoolValue_Actor";
+            break;
+        case CoolValue_Symbol:
+        default:
+            break;
+            // return "CoolValue_Symbol";
+    }
+
+    return root;
 }
 
-void
-value_Deserialize(Value *value)
+Value *
+value_FromJSON(cJSON *json)
 {
+    Value *result = NULL;
 
+    cJSON *typeJson = cJSON_GetObjectItem(json, "type");
+    char *typeString = cJSON_PrintUnformatted(typeJson);
+    int type = atoi(typeString);
+    free(typeString);
+
+    switch (type) {
+        case CoolValue_Error:
+
+            // return "CoolValue_Error";
+            break;
+        case CoolValue_Function:
+
+            // return "CoolValue_Function";
+            break;
+        case CoolValue_Qexpr:
+        case CoolValue_Sexpr: {
+                cJSON *valueJson = cJSON_GetObjectItem(json, "value"); // array!
+                result = value_SExpr();
+                int size = cJSON_GetArraySize(valueJson);
+
+                for (int i = 0; i < size; i++) {
+                    cJSON *arrayItem = cJSON_GetArrayItem(valueJson, i);
+                    Value *arrayValue = value_FromJSON(arrayItem);
+                    value_AddCell(result, arrayValue);
+                }
+
+                break;
+            }
+        case CoolValue_Integer: {
+            cJSON *valueJson = cJSON_GetObjectItem(json, "value");
+            char *valueString = cJSON_PrintUnformatted(valueJson);
+
+            int length = strlen(valueString) - 2;
+            char *unformattedString = malloc(length);
+            memcpy(unformattedString, valueString + 1, length);
+
+            result = value_Integer(0);
+            int valid = mpz_set_str(result->bignumber, unformattedString, 10);
+            if (valid < 0) {
+                // TODO: serious error checking
+                return NULL;
+            }
+
+            free(valueString);
+            free(unformattedString);
+
+            break;
+        }
+        case CoolValue_Double:
+
+            // return "CoolValue_Double";
+            break;
+        case CoolValue_Byte:
+
+            // return "CoolValue_Byte";
+            break;
+        case CoolValue_String:
+
+            // return "CoolValue_String";
+            break;
+        case CoolValue_Actor:
+
+            // return "CoolValue_Actor";
+            break;
+        case CoolValue_Symbol:
+        default:
+            break;
+            // return "CoolValue_Symbol";
+    }
+
+    return result;
 }
 
 Value *
@@ -899,6 +1029,39 @@ builtin_Join(Environment *env, Value *x)
     return y;
 }
 
+Value *
+builtin_Encode(Environment *env, Value *x)
+{
+    CASSERT(x, x->count == 1, "Function 'encode' passed too many arguments, got %d", x->count);
+
+    cJSON *encodedForm = value_ToJSON(x->cell[0]);
+    if (encodedForm != NULL) {
+        char *stringForm = cJSON_Print(encodedForm);
+        Value *result = value_String(stringForm);
+        free(stringForm);
+        return result;
+    } else {
+        return value_Error("Unable to encode the value");
+    }
+}
+
+Value *
+builtin_Decode(Environment *env, Value *x)
+{
+    CASSERT(x, x->count == 1, "Function 'decode' passed too many arguments, got %d", x->count);
+    CASSERT(x, x->cell[0]->type == CoolValue_String, "Function 'decode' passed incorrect type, got %s", value_TypeString(x->cell[0]->type));
+
+    cJSON *encodedForm = cJSON_Parse(x->cell[0]->string);
+    if (encodedForm != NULL) {
+        Value *result = value_FromJSON(encodedForm);
+        cJSON_Delete(encodedForm);
+        value_Println(stdout, result);
+        return result;
+    } else {
+        return value_Error("Unable to decode the value");
+    }
+}
+
 int
 value_Equal(Value *x, Value *y)
 {
@@ -1148,7 +1311,8 @@ builtin_SendAsync(Environment *env, Value *val)
     Value *actorWrapper = environment_Get(env, lookupSymbol);
 
     if (actorWrapper->type == CoolValue_Actor) {
-        actor_SendMessageAsync(actorWrapper->actor, val->cell[1]);
+        cJSON *encodedMessage = value_ToJSON(val->cell[1]);
+        actor_SendMessageAsync(actorWrapper->actor, encodedMessage);
     } else if (actorWrapper->type == CoolValue_Actor) {
         // TODO: this is where we would expect to issue an interest... but is that the correct behavior?
         // 1. ***environment has default remote actor that we reference here -- use this one for now.
@@ -1172,7 +1336,9 @@ builtin_SendSync(Environment *env, Value *val)
     Value *actorWrapper = environment_Get(env, lookupSymbol);
 
     if (actorWrapper->type == CoolValue_Actor) {
-        Value *result = (Value *) actor_SendMessageSync(actorWrapper->actor, val->cell[1]);
+        cJSON *encodedMessage = value_ToJSON(val->cell[1]);
+        printf("sending: %s\n", cJSON_Print(encodedMessage));
+        Value *result = (Value *) actor_SendMessageSync(actorWrapper->actor, encodedMessage);
         return result;
     } else {
         return value_Error("Invalid type returned when indexing into the Actor\n");
@@ -1397,6 +1563,9 @@ environment_AddBuiltinFunctions(Environment *env)
     environment_AddBuiltin(env, "join", builtin_Join);
     environment_AddBuiltin(env, "head", builtin_Head);
     environment_AddBuiltin(env, "tail", builtin_Tail);
+
+    environment_AddBuiltin(env, "encode", builtin_Encode);
+    environment_AddBuiltin(env, "decode", builtin_Decode);
 
     environment_AddBuiltin(env, "<!", builtin_SendAsync);
     environment_AddBuiltin(env, "<-", builtin_SendSync);

@@ -5,6 +5,7 @@
 #include "../cool_types.h"
 #include "channel.h"
 #include "actor.h"
+
 #include "ccn/ccn_producer.h"
 
 typedef struct actor_message_queue ActorMessageQueue;
@@ -17,7 +18,7 @@ struct actor_message_queue {
 
 struct local_actor {
     ActorMessageQueue *inputQueue;
-    void *(*callback)(void *metadata, void *message);
+    cJSON *(*callback)(void *metadata, cJSON *message);
     void *metadata;
 };
 typedef struct local_actor LocalActor;
@@ -34,23 +35,27 @@ struct actor {
     ActorID id;
 };
 
-static void *localActor_SendMessageSync(LocalActor *actor, void *message);
-static void localActor_SendMessageAsync(LocalActor *actor, void *message);
+static cJSON *localActor_SendMessageSync(LocalActor *actor, cJSON *message);
+static cJSON *globalActor_SendMessageSync(GlobalActor *actor, cJSON *message);
+static void localActor_SendMessageAsync(LocalActor *actor, cJSON *message);
+static void globalActor_SendMessageAsync(GlobalActor *actor, cJSON *message);
+static void globalActor_Start(GlobalActor *actor);
 static void localActor_Start(LocalActor *actor);
+static void globalActor_Run(GlobalActor *actor);
 static void localActor_Run(LocalActor *actor);
 
 ActorInterface *LocalActorInterface = &(ActorInterface) {
     .start = (void (*)(void *)) localActor_Start,
     .getID = (ActorID (*)(void *)) actor_GetID,
-    .sendMessageAsync = (void (*)(void *, void *)) localActor_SendMessageAsync,
-    .sendMessageSync = (void *(*)(void *, void *)) localActor_SendMessageSync
+    .sendMessageAsync = (void (*)(void *, cJSON *)) localActor_SendMessageAsync,
+    .sendMessageSync = (cJSON *(*)(void *, cJSON *)) localActor_SendMessageSync
 };
 
-ActorInterface *LocalActorInterface = &(ActorInterface) {
+ActorInterface *GlobalActorInterface = &(ActorInterface) {
     .start = (void (*)(void *)) globalActor_Start,
     .getID = (ActorID (*)(void *)) actor_GetID,
-    .sendMessageAsync = (void (*)(void *, void *)) globalActor_SendMessageAsync,
-    .sendMessageSync = (void *(*)(void *, void *)) globalActor_SendMessageSync
+    .sendMessageAsync = (void (*)(void *, cJSON *)) globalActor_SendMessageAsync,
+    .sendMessageSync = (cJSON *(*)(void *, cJSON *)) globalActor_SendMessageSync
 };
 
 // TODO: implement this generic actor interface
@@ -85,7 +90,7 @@ ActorMessageQueue_PopMessage(ActorMessageQueue *queue)
 }
 
 Actor *
-actor_CreateLocal(void *callbackMetadata, void *(*callback)(void *, void *))
+actor_CreateLocal(void *callbackMetadata, cJSON *(*callback)(void *, cJSON *))
 {
     Actor *actor = (Actor *) malloc(sizeof(Actor));
     volatile size_t inc = 1;
@@ -104,9 +109,9 @@ actor_CreateLocal(void *callbackMetadata, void *(*callback)(void *, void *))
 }
 
 Actor *
-actor_CreateGlobal(char *name, void *callbackMetadata, void *(*callback)(void *, void *))
+actor_CreateGlobal(char *name, void *callbackMetadata, cJSON *(*callback)(void *, cJSON *))
 {
-    Actor *actor = actor_CreateLocal(callbackMetadata, callback);
+    // Actor *actor = actor_CreateLocal(callbackMetadata, callback);
     // actor->producer = producerPortal_Create(name);
 
     // return actor;
@@ -121,7 +126,7 @@ localActor_Run(LocalActor *actor)
         Signal *thesignal = channelMessage_GetSignal(message);
 
         signal_Lock(thesignal);
-        void *result = actor->callback(actor->metadata, channelMessage_GetPayload(message));
+        cJSON *result = actor->callback(actor->metadata, channelMessage_GetPayload(message));
 
         channelMessage_SetOutput(message, result);
         signal_Notify(thesignal);
@@ -130,7 +135,7 @@ localActor_Run(LocalActor *actor)
 }
 
 static void
-globalActor_Run(LocalActor *actor)
+globalActor_Run(GlobalActor *actor)
 {
     for (;;) {
         // TODO
@@ -151,9 +156,15 @@ globalActor_Start(GlobalActor *actor)
     pthread_create(t, NULL, (void *) &globalActor_Run, (void *) actor);
 }
 
+void
+globalActor_SendMessageAsync(GlobalActor *actor, cJSON *message)
+{
+    // TODO
+}
+
 // TODO: this should take a callback as an argument, obviously.
 void
-localActor_SendMessageAsync(LocalActor *actor, void *message)
+localActor_SendMessageAsync(LocalActor *actor, cJSON *message)
 {
     // We ignore the signal that's returned since we are not waiting
     // for it to complete.
@@ -164,8 +175,15 @@ localActor_SendMessageAsync(LocalActor *actor, void *message)
     signal_Unlock(thesignal);
 }
 
-void *
-localActor_SendMessageSync(LocalActor *actor, void *message)
+cJSON *
+globalActor_SendMessageSync(GlobalActor *actor, cJSON *message)
+{
+    // TODO
+    return NULL;
+}
+
+cJSON *
+localActor_SendMessageSync(LocalActor *actor, cJSON *message)
 {
     ChannelMessage *channelMessage = channelMessage_Create(message);
     Signal *thesignal = channelMessage_GetSignal(channelMessage);
@@ -176,7 +194,7 @@ localActor_SendMessageSync(LocalActor *actor, void *message)
     signal_Wait(thesignal, NULL);
     signal_Unlock(thesignal);
 
-    void *output = channelMessage_GetOutput(channelMessage);
+    cJSON *output = channelMessage_GetOutput(channelMessage);
 
     return output;
 }
@@ -194,13 +212,13 @@ actor_Start(Actor *actor)
 }
 
 void
-actor_SendMessageAsync(Actor *actor, void *message)
+actor_SendMessageAsync(Actor *actor, cJSON *message)
 {
     actor->interface->sendMessageAsync(actor->instance, message);
 }
 
-void *
-actor_SendMessageSync(Actor *actor, void *message)
+cJSON *
+actor_SendMessageSync(Actor *actor, cJSON *message)
 {
     return actor->interface->sendMessageSync(actor->instance, message);
 }
