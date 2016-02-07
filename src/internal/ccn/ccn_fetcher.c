@@ -1,9 +1,9 @@
-#include <config.h>
 #include <stdio.h>
 
 #include <LongBow/runtime.h>
 
 #include <ccnx/api/ccnx_Portal/ccnx_Portal.h>
+#include <ccnx/api/ccnx_Portal/ccnx_PortalRTA.h>
 
 #include "ccn_common.h"
 #include "ccn_fetcher.h"
@@ -13,7 +13,7 @@
 struct ccn_fetcher {
     CCNxName *prefix;
     CCNxPortal *portal;
-}
+};
 
 CCNFetcher *
 consumerPortal_Create(char *prefix)
@@ -23,7 +23,7 @@ consumerPortal_Create(char *prefix)
     CCNxPortalFactory *factory = setupConsumerFactory();
 
     CCNFetcher *consumer = (CCNFetcher *) malloc(sizeof(CCNFetcher));
-    consumer->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message, &ccnxPortalAttributes_Blocking);
+    consumer->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
 
     assertNotNull(consumer->portal, "Expected a non-null CCNxPortal pointer.");
 
@@ -32,6 +32,8 @@ consumerPortal_Create(char *prefix)
 
     return consumer;
 }
+
+
 
 // TODO: get -- returns COOLMessage
 
