@@ -1,6 +1,8 @@
 #ifndef libcool_internal_actor_
 #define libcool_internal_actor_
 
+#include <stddef.h>
+
 #include "signal.h"
 #include "encoding/cJSON.h"
 

@@ -1,0 +1,1 @@
+/Users/cwood/Projects/cool/src/CMakeFiles/cool.dir

@@ -111,11 +111,18 @@ actor_CreateLocal(void *callbackMetadata, cJSON *(*callback)(void *, cJSON *))
 Actor *
 actor_CreateGlobal(char *name, void *callbackMetadata, cJSON *(*callback)(void *, cJSON *))
 {
-    // Actor *actor = actor_CreateLocal(callbackMetadata, callback);
-    // actor->producer = producerPortal_Create(name);
+    GlobalActor *globalActor = (GlobalActor *) malloc(sizeof(GlobalActor));
+    globalActor->actor = actor_CreateLocal(callbackMetadata, callback);
+    globalActor->portal = producerPortal_Create(name, callbackMetadata, callback);
 
-    // return actor;
-    return NULL;
+    Actor *actor = (Actor *) malloc(sizeof(Actor));
+    volatile size_t inc = 1;
+
+    actor->id = __sync_fetch_and_add(&_actorId, inc);
+    actor->instance = (void *) globalActor;
+    actor->interface = GlobalActorInterface;
+
+    return actor;
 }
 
 static void
@@ -137,9 +144,11 @@ localActor_Run(LocalActor *actor)
 static void
 globalActor_Run(GlobalActor *actor)
 {
-    for (;;) {
-        // TODO
-    }
+    // TODO: spin up a thread to handle the portal runner and then invoke the local handler here
+    actor_Start(actor->actor);
+
+    pthread_t *t = (pthread_t *) malloc(sizeof(pthread_t));
+    pthread_create(t, NULL, (void *) &producePortal_Run, (void *) actor->portal);
 }
 
 void
@@ -162,7 +171,7 @@ globalActor_SendMessageAsync(GlobalActor *actor, cJSON *message)
     // TODO
 }
 
-// TODO: this should take a callback as an argument, obviously.
+// TODO: this should take a callback as an argument (invoked with the output when complete)
 void
 localActor_SendMessageAsync(LocalActor *actor, cJSON *message)
 {

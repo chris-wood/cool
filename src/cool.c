@@ -272,11 +272,15 @@ value_Lambda(Value *formals, Value *body)
 
 cJSON *
 value_FunctionWrapper(EvaluateWrapper *wrapper, cJSON *encodedParameters) {
-    printf("%s\n", cJSON_Print(encodedParameters));
+    printf("FUNCTION  INPUT: %s\n", cJSON_Print(encodedParameters));
+
     Value *parameters = value_FromJSON(encodedParameters);
     Value *functionBody = value_Copy(wrapper->param);
-    Value *result = value_Call(wrapper->env, functionBody, parameters); // function invocation
+    Value *result = value_Call(wrapper->env, functionBody, parameters);
     cJSON *encodedResult = value_ToJSON(result);
+
+    printf("FUNCTION OUTPUT = %s\n", cJSON_Print(encodedResult));
+
     return encodedResult;
 }
 
@@ -387,7 +391,7 @@ value_ToJSON(Value *value)
                 break;
             }
         case CoolValue_Integer: {
-                char *stringForm = mpz_get_str(NULL, 2, value->bignumber);
+                char *stringForm = mpz_get_str(NULL, 10, value->bignumber);
                 cJSON_AddItemToObject(root, "value", cJSON_CreateString(stringForm));
                 free(stringForm);
 
@@ -1337,7 +1341,6 @@ builtin_SendSync(Environment *env, Value *val)
 
     if (actorWrapper->type == CoolValue_Actor) {
         cJSON *encodedMessage = value_ToJSON(val->cell[1]);
-        printf("sending: %s\n", cJSON_Print(encodedMessage));
         Value *result = (Value *) actor_SendMessageSync(actorWrapper->actor, encodedMessage);
         return result;
     } else {
