@@ -9,6 +9,7 @@
 #include "internal/actor.h"
 #include "internal/buffer.h"
 #include "internal/encoding/cJSON.h"
+#include "internal/ccn/ccn_fetcher.h"
 
 #define FILE_BLOCK_SIZE 128
 
@@ -43,7 +44,7 @@ struct cenv {
     int count;
     char **symbols;
     struct cval **values;
-    // TODO: consumer portal goes here...
+    CCNFetcher *fetcher;
 };
 
 // Wrapper for coroutines (from _Run builtin)
@@ -92,10 +93,13 @@ Environment *
 environment_Create()
 {
     Environment *env = (Environment *) malloc(sizeof(Environment));
+
     env->parent = NULL;
     env->count = 0;
     env->symbols = (char **) malloc(sizeof(char *));
     env->values = (Value **) malloc(sizeof(Value *));
+    env->fetcher = ccnFetcher_Create();
+
     return env;
 }
 
@@ -171,6 +175,19 @@ environment_DefineKeyValue(Environment *env, Value *key, Value *value)
         env = env->parent;
     }
     environment_PutKeyValue(env, key, value);
+}
+
+cJSON *
+environment_ToJSON(Environment *eenvironment)
+{
+
+    return NULL;
+}
+
+Environment *
+environment_FromJSON(cJSON *root)
+{
+    return NULL;
 }
 
 CoolValue
@@ -364,6 +381,11 @@ value_TypeString(int type)
     }
 }
 
+//double fpnumber;
+//uint8_t byte;
+//mpz_t bignumber;
+//Actor *actor;
+
 cJSON *
 value_ToJSON(Value *value)
 {
@@ -372,51 +394,52 @@ value_ToJSON(Value *value)
 
     switch (value->type) {
         case CoolValue_Error:
-
-            // return "CoolValue_Error";
+            cJSON_AddItemToObject(root, "value", cJSON_CreateString(value->errorString));
             break;
         case CoolValue_Function:
-
+            // TODO: finishme
             // return "CoolValue_Function";
             break;
         case CoolValue_Qexpr:
         case CoolValue_Sexpr: {
-                cJSON *list = cJSON_CreateArray();
-                for (int i = 0; i < value->count; i++) {
-                    cJSON *jsonForm = value_ToJSON(value->cell[i]);
-                    cJSON_AddItemToArray(list, jsonForm);
-                    // TODO: is this a leak?...
-                }
-                cJSON_AddItemToObject(root, "value", list);
-                break;
+            cJSON *list = cJSON_CreateArray();
+            for (int i = 0; i < value->count; i++) {
+                cJSON *jsonForm = value_ToJSON(value->cell[i]);
+                cJSON_AddItemToArray(list, jsonForm);
+                // TODO: is this a leak?...
             }
+            cJSON_AddItemToObject(root, "value", list);
+            break;
+        }
         case CoolValue_Integer: {
-                char *stringForm = mpz_get_str(NULL, 10, value->bignumber);
-                cJSON_AddItemToObject(root, "value", cJSON_CreateString(stringForm));
-                free(stringForm);
-
-                break;
-            }
-        case CoolValue_Double:
-
-            // return "CoolValue_Double";
+            char *stringForm = mpz_get_str(NULL, 10, value->bignumber);
+            cJSON_AddItemToObject(root, "value", cJSON_CreateString(stringForm));
+            free(stringForm);
             break;
-        case CoolValue_Byte:
-
-            // return "CoolValue_Byte";
+        }
+        case CoolValue_Double: {
+            char *stringForm = NULL;
+            asprintf(&stringForm, "%f", value->fpnumber);
+            cJSON_AddItemToObject(root, "value", cJSON_CreateString(stringForm));
+            free(stringForm);
             break;
-        case CoolValue_String:
-
-            // return "CoolValue_String";
+        }
+        case CoolValue_Byte: {
+            char *stringForm = NULL;
+            asprintf(&stringForm, "%d", value->byte);
+            cJSON_AddItemToObject(root, "value", cJSON_CreateString(stringForm));
+            free(stringForm);
             break;
+        }
+        case CoolValue_String: {
+            cJSON_AddItemToObject(root, "value", cJSON_CreateString(value->string));
+            break;
+        }
         case CoolValue_Actor:
-
-            // return "CoolValue_Actor";
-            break;
         case CoolValue_Symbol:
         default:
-            break;
-            // return "CoolValue_Symbol";
+            cJSON_Delete(root);
+            return NULL;
     }
 
     return root;
@@ -433,28 +456,28 @@ value_FromJSON(cJSON *json)
     free(typeString);
 
     switch (type) {
-        case CoolValue_Error:
-
-            // return "CoolValue_Error";
+        case CoolValue_Error: {
+            cJSON *valueJson = cJSON_GetObjectItem(json, "value");
+            result->errorString = cJSON_PrintUnformatted(valueJson);
             break;
+        }
         case CoolValue_Function:
-
-            // return "CoolValue_Function";
+            // TODO: finishme
             break;
         case CoolValue_Qexpr:
         case CoolValue_Sexpr: {
-                cJSON *valueJson = cJSON_GetObjectItem(json, "value"); // array!
-                result = value_SExpr();
-                int size = cJSON_GetArraySize(valueJson);
+            cJSON *valueJson = cJSON_GetObjectItem(json, "value"); // array
+            result = value_SExpr();
+            int size = cJSON_GetArraySize(valueJson);
 
-                for (int i = 0; i < size; i++) {
-                    cJSON *arrayItem = cJSON_GetArrayItem(valueJson, i);
-                    Value *arrayValue = value_FromJSON(arrayItem);
-                    value_AddCell(result, arrayValue);
-                }
-
-                break;
+            for (int i = 0; i < size; i++) {
+                cJSON *arrayItem = cJSON_GetArrayItem(valueJson, i);
+                Value *arrayValue = value_FromJSON(arrayItem);
+                value_AddCell(result, arrayValue);
             }
+
+            break;
+        }
         case CoolValue_Integer: {
             cJSON *valueJson = cJSON_GetObjectItem(json, "value");
             char *valueString = cJSON_PrintUnformatted(valueJson);
@@ -466,7 +489,7 @@ value_FromJSON(cJSON *json)
             result = value_Integer(0);
             int valid = mpz_set_str(result->bignumber, unformattedString, 10);
             if (valid < 0) {
-                // TODO: serious error checking
+                // TODO: real error checking
                 return NULL;
             }
 
@@ -475,18 +498,25 @@ value_FromJSON(cJSON *json)
 
             break;
         }
-        case CoolValue_Double:
-
-            // return "CoolValue_Double";
+        case CoolValue_Double: {
+            cJSON *valueJson = cJSON_GetObjectItem(json, "value");
+            char *valueString = cJSON_PrintUnformatted(valueJson);
+            result->fpnumber = atof(valueString);
+            free(valueString);
             break;
-        case CoolValue_Byte:
-
-            // return "CoolValue_Byte";
+        }
+        case CoolValue_Byte: {
+            cJSON *valueJson = cJSON_GetObjectItem(json, "value");
+            char *valueString = cJSON_PrintUnformatted(valueJson);
+            result->byte = (uint8_t) atoi(valueString);
+            free(valueString);
             break;
-        case CoolValue_String:
-
-            // return "CoolValue_String";
+        }
+        case CoolValue_String: {
+            cJSON *valueJson = cJSON_GetObjectItem(json, "value");
+            result->string = cJSON_PrintUnformatted(valueJson);
             break;
+        }
         case CoolValue_Actor:
 
             // return "CoolValue_Actor";
@@ -1317,12 +1347,8 @@ builtin_SendAsync(Environment *env, Value *val)
     if (actorWrapper->type == CoolValue_Actor) {
         cJSON *encodedMessage = value_ToJSON(val->cell[1]);
         actor_SendMessageAsync(actorWrapper->actor, encodedMessage);
-    } else if (actorWrapper->type == CoolValue_Actor) {
-        // TODO: this is where we would expect to issue an interest... but is that the correct behavior?
-        // 1. ***environment has default remote actor that we reference here -- use this one for now.
-        // 2. environment_Get returns default actor for not found symbols
-        // 3. ???
     } else {
+        // TODO: issue the interest here
         return value_Error("Invalid type returned when indexing into the Actor\n");
     }
 
@@ -1344,7 +1370,10 @@ builtin_SendSync(Environment *env, Value *val)
         Value *result = (Value *) actor_SendMessageSync(actorWrapper->actor, encodedMessage);
         return result;
     } else {
-        return value_Error("Invalid type returned when indexing into the Actor\n");
+        cJSON *encodedMessage = value_ToJSON(val->cell[1]);
+        cJSON *response = ccnFetcher_Fetch(env->fetcher, val->cell[0]->string, encodedMessage);
+        Value *result = value_FromJSON(response);
+        return result;
     }
 }
 
@@ -1508,9 +1537,9 @@ builtin_SpawnLocal(Environment *env, Value *x)
 Value *
 builtin_SpawnGlobal(Environment *env, Value *x)
 {
-    CASSERT_NUM("gspawn", x, 2);
-    CASSERT_TYPE("gspawn", x, 0, CoolValue_String);
-    CASSERT_TYPE("gspawn", x, 1, CoolValue_Function);
+    CASSERT_NUM("service", x, 2);
+    CASSERT_TYPE("service", x, 0, CoolValue_String);
+    CASSERT_TYPE("service", x, 1, CoolValue_Function);
 
     // syntax: spawn <name> <function>
     Value *actorWrapper = value_ActorGlobal(env, x->cell[1], x->cell[0]->string);
@@ -1547,7 +1576,7 @@ environment_AddBuiltinFunctions(Environment *env)
 
     environment_AddBuiltin(env, "run", builtin_Run);
     environment_AddBuiltin(env, "spawn", builtin_SpawnLocal);
-    environment_AddBuiltin(env, "gspawn", builtin_SpawnGlobal);
+    environment_AddBuiltin(env, "service", builtin_SpawnGlobal);
 
     environment_AddBuiltin(env, "\\", builtin_Lambda);
     environment_AddBuiltin(env, "def", builtin_Def);
