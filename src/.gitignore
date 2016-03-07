@@ -15,3 +15,5 @@ strings
 *.gcov
 *.gcno
 *.gcda
+
+CMakeFiles/
