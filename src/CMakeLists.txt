@@ -14,7 +14,7 @@ set(cool_INCLUDE_DIRS
 
 include_directories(
         /usr/local/include/
-        /Users/cwood/PARC/Distillery/build/include/
+        /Users/cwood/PARC/CCNx_Distillery/usr/include/
         ${cool_INCLUDE_DIRS}
     )
 
@@ -35,7 +35,7 @@ set(cool_SOURCES
 
 
 link_directories(
-        /Users/cwood/PARC/Distillery/build/lib
+        /Users/cwood/PARC/CCNx_Distillery/usr/lib
         /usr/local/lib
     )
 
@@ -44,6 +44,6 @@ add_executable(cool ${cool_SOURCES})
 # edit = readline
 # gmp = math
 # rest = CCNx stuff
-target_link_libraries(cool longbow parc ccnx_common ccnx_api_portal rta gmp edit)
+target_link_libraries(cool longbow longbow-ansiterm parc ccnx_common ccnx_api_portal ccnx_api_notify ccnx_api_control ccnx_transport_rta gmp edit )
 
 install(TARGETS cool DESTINATION bin)

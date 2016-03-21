@@ -5,18 +5,21 @@
 #include <ccnx/api/ccnx_Portal/ccnx_Portal.h>
 #include <ccnx/api/ccnx_Portal/ccnx_PortalRTA.h>
 
+#include <parc/algol/parc_Buffer.h>
+
+#include <parc/security/parc_Security.h>
+
 #include "ccn_common.h"
 #include "ccn_fetcher.h"
 
 // TODO; API: non-blocking get, including a payload if it's an actor message (that's it)
 
 struct ccn_fetcher {
-    CCNxName *prefix;
     CCNxPortal *portal;
 };
 
 CCNFetcher *
-consumerPortal_Create(char *prefix)
+ccnFetcher_Create()
 {
     parcSecurity_Init();
 
@@ -27,45 +30,53 @@ consumerPortal_Create(char *prefix)
 
     assertNotNull(consumer->portal, "Expected a non-null CCNxPortal pointer.");
 
-    // TODO: lci:/ was the prefix
-    consumer->prefix = ccnxName_CreateFromURI(prefix);
-
     return consumer;
 }
 
+cJSON *
+ccnFetcher_Fetch(CCNFetcher *fetcher, char *nameString, cJSON *message)
+{
+    CCNxName *name = ccnxName_CreateFromURI(nameString);
+    if (name != NULL) {
+        PARCBuffer *buffer = NULL;
+        if (message != NULL) {
+            char *payload = cJSON_Print(message);
+            size_t payloadSize = strlen(payload);
+            buffer = parcBuffer_Allocate(payloadSize + 1);
+            parcBuffer_Flip(parcBuffer_PutArray(buffer, payloadSize, payload));
+        }
 
+        CCNxInterest *interest = ccnxInterest_CreateSimple(name);
+        if (buffer != NULL) {
+            ccnxInterest_SetPayloadAndId(interest, buffer);
+            PARCBuffer *realPayload = ccnxInterest_GetPayload(interest);
+        }
 
-// TODO: get -- returns COOLMessage
+        CCNxMetaMessage *message = ccnxMetaMessage_CreateFromInterest(interest);
+        cJSON *response = cJSON_Parse("{}");
 
-//     CCNxInterest *interest = ccnxInterest_CreateSimple(name);
-//     ccnxName_Release(&name);
-//
-//     CCNxMetaMessage *message = ccnxMetaMessage_CreateFromInterest(interest);
-//
-//     if (ccnxPortal_Send(portal, message)) {
-//         while (ccnxPortal_IsError(portal) == false) {
-//             CCNxMetaMessage *response = ccnxPortal_Receive(portal);
-//             if (response != NULL) {
-//                 if (ccnxMetaMessage_IsContentObject(response)) {
-//                     CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(response);
-//
-//                     PARCBuffer *payload = ccnxContentObject_GetPayload(contentObject);
-//
-//                     char *string = parcBuffer_ToString(payload);
-//                     printf("%s\n", string);
-//                     parcMemory_Deallocate((void **)&string);
-//
-//                     break;
-//                 }
-//             }
-//             ccnxMetaMessage_Release(&response);
-//         }
-//     }
-//
-//     ccnxPortal_Release(&portal);
-//
-//     ccnxPortalFactory_Release(&factory);
-//
-//     parcSecurity_Fini();
-//     return 0;
-// }
+        if (ccnxPortal_Send(fetcher->portal, message, CCNxStackTimeout_Never)) {
+            while (ccnxPortal_IsError(fetcher->portal) == false) {
+                CCNxMetaMessage *responseObject = ccnxPortal_Receive(fetcher->portal, CCNxStackTimeout_Never);
+                if (responseObject != NULL) {
+                    if (ccnxMetaMessage_IsContentObject(responseObject)) {
+                        CCNxContentObject *contentObject = ccnxMetaMessage_GetContentObject(responseObject);
+
+                        PARCBuffer *payload = ccnxContentObject_GetPayload(contentObject);
+
+                        char *bufferString = parcBuffer_ToString(payload);
+                        response = cJSON_Parse(bufferString);
+                        parcBuffer_Release(&payload);
+
+                        break;
+                    }
+                }
+                ccnxMetaMessage_Release(&responseObject);
+            }
+        }
+
+        return response;
+    }
+
+    return NULL;
+}

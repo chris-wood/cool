@@ -25,7 +25,7 @@ typedef struct local_actor LocalActor;
 
 struct global_actor {
     Actor *actor;
-    ProducerPortal *portal;
+    CCNProducer *portal;
 };
 typedef struct global_actor GlobalActor;
 
@@ -113,7 +113,7 @@ actor_CreateGlobal(char *name, void *callbackMetadata, cJSON *(*callback)(void *
 {
     GlobalActor *globalActor = (GlobalActor *) malloc(sizeof(GlobalActor));
     globalActor->actor = actor_CreateLocal(callbackMetadata, callback);
-    globalActor->portal = producerPortal_Create(name, callbackMetadata, callback);
+    globalActor->portal = ccnProducer_Create(name, callbackMetadata, callback);
 
     Actor *actor = (Actor *) malloc(sizeof(Actor));
     volatile size_t inc = 1;
@@ -148,7 +148,7 @@ globalActor_Run(GlobalActor *actor)
     actor_Start(actor->actor);
 
     pthread_t *t = (pthread_t *) malloc(sizeof(pthread_t));
-    pthread_create(t, NULL, (void *) &producePortal_Run, (void *) actor->portal);
+    pthread_create(t, NULL, (void *) &ccnProducer_Run, (void *) actor->portal);
 }
 
 void
@@ -168,7 +168,7 @@ globalActor_Start(GlobalActor *actor)
 void
 globalActor_SendMessageAsync(GlobalActor *actor, cJSON *message)
 {
-    // TODO
+    actor_SendMessageAsync(actor->actor, message);
 }
 
 // TODO: this should take a callback as an argument (invoked with the output when complete)
@@ -187,8 +187,7 @@ localActor_SendMessageAsync(LocalActor *actor, cJSON *message)
 cJSON *
 globalActor_SendMessageSync(GlobalActor *actor, cJSON *message)
 {
-    // TODO
-    return NULL;
+    return actor_SendMessageSync(actor->actor, message);
 }
 
 cJSON *

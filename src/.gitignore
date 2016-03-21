@@ -16,5 +16,11 @@ strings
 *.gcno
 *.gcda
 
+# Cmake and development ignores
+cmake_install.cmake
+CMakeCache.txt
 CMakeFiles/
 .idea/
+
+# CCN stuff
+consumer_keystore

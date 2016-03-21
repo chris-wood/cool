@@ -3,10 +3,10 @@
 
 #include <internal/encoding/cJSON.h>
 
-struct producer_portal;
-typedef struct producer_portal ProducerPortal;
+struct ccn_producer;
+typedef struct ccn_producer CCNProducer;
 
-ProducerPortal *producerPortal_Create(char *prefix, void *callbackMetadata, cJSON *(*callback)(void *, cJSON *));
-void producePortal_Run(ProducerPortal *producer);
+CCNProducer *ccnProducer_Create(char *prefix, void *callbackMetadata, cJSON *(*callback)(void *, cJSON *));
+void ccnProducer_Run(CCNProducer *producer);
 
 #endif // libcool_internal_ccn_producer_
