@@ -40,36 +40,29 @@ signal_Destroy(Signal **signalP)
 void
 signal_Lock(Signal *thesignal)
 {
-    // printf("locking condition %u\n", thesignal->id);
     pthread_mutex_lock(&thesignal->mutex);
 }
 
 void
 signal_Unlock(Signal *thesignal)
 {
-    // printf("unlocking condition %u\n", thesignal->id);
     pthread_mutex_unlock(&thesignal->mutex);
 }
 
 void
 signal_Notify(Signal *thesignal)
 {
-    // printf("setting condition %u\n", thesignal->id);
     pthread_cond_signal(&thesignal->cond);
 }
 
 void
 signal_Wait(Signal *thesignal, int (*condition)(void *state))
 {
-    // printf("I've been unlocked %u\n", thesignal->id);
-
     if (condition != NULL) {
         while (condition(thesignal->context) >= 1) {
             pthread_cond_wait(&(thesignal->cond), &(thesignal->mutex));
         }
     } else {
-        // printf("waiting on condition %u\n", thesignal->id);
         pthread_cond_wait(&(thesignal->cond), &(thesignal->mutex));
-        // printf("cond released %u\n", thesignal->id);
     }
 }

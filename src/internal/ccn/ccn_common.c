@@ -8,7 +8,7 @@
 
 #include <parc/security/parc_Security.h>
 #include <parc/security/parc_IdentityFile.h>
-#include <parc/security/parc_PublicKeySignerPkcs12Store.h>
+#include <parc/security/parc_Pkcs12KeyStore.h>
 
 #include <parc/algol/parc_Memory.h>
 
@@ -17,15 +17,15 @@
 PARCIdentity *
 createAndGetIdentity(void)
 {
-    const char *keystoreName = "consumer_keystore";
+    const char *keystoreName = "keystore";
     const char *keystorePassword = "keystore_password";
     unsigned int keyLength = 1024;
     unsigned int validityDays = 30;
-    char *subjectName = "consumer";
+    char *subjectName = "cool";
 
-    bool success = parcPublicKeySignerPkcs12Store_CreateFile(keystoreName, keystorePassword, subjectName, keyLength, validityDays);
+    bool success = parcPkcs12KeyStore_CreateFile(keystoreName, keystorePassword, subjectName, keyLength, validityDays);
     assertTrue(success,
-               "parcPublicKeySignerPkcs12Store_CreateFile('%s', '%s', '%s', %d, %d) failed.",
+               "parcPkcs12KeyStore_CreateFile('%s', '%s', '%s', %d, %d) failed.",
                keystoreName, keystorePassword, subjectName, keyLength, validityDays);
 
     PARCIdentityFile *identityFile = parcIdentityFile_Create(keystoreName, keystorePassword);

@@ -21,6 +21,8 @@ struct ccn_producer {
     CCNxName *prefix;
     CCNxPortal *portal;
 
+    // TODO: add handle to the repo here
+
     void *callbackMetadata;
     cJSON *(*callback)();
 };
@@ -35,7 +37,7 @@ ccnProducer_Create(char *prefix, void *callbackMetadata, cJSON *(*callback)(void
 
     CCNProducer *producer = (CCNProducer *) malloc(sizeof(CCNProducer));
     producer->portal = ccnxPortalFactory_CreatePortal(factory, ccnxPortalRTA_Message);
-    producer->prefix = ccnxName_CreateFromURI(prefix);
+    producer->prefix = ccnxName_CreateFromCString(prefix);
 
     producer->callback = callback;
     producer->callbackMetadata = callbackMetadata;
@@ -50,8 +52,6 @@ ccnProducer_Create(char *prefix, void *callbackMetadata, cJSON *(*callback)(void
     }
 }
 
-// TODO: this shouldn't be an interest... but a wrapper for Name+Payload (RPC plus body?)
-// TODO: should this be an ActorMessage?
 cJSON *
 producerPortal_Get(CCNProducer *producer, CCNxName **name)
 {
@@ -63,25 +63,14 @@ producerPortal_Get(CCNProducer *producer, CCNxName **name)
 
     CCNxInterest *interest = ccnxMetaMessage_GetInterest(request);
 
-    printf("Got something! %s\n", ccnxInterest_ToString(interest));
-
-    // TODO:  the interest paylod is empty... wtf.
-
-    *name = ccnxName_CreateFromURI(ccnxName_ToString(ccnxInterest_GetName(interest)));
+    // Save the name so that the entity can act on it
+    *name = ccnxName_CreateFromCString(ccnxName_ToString(ccnxInterest_GetName(interest)));
     PARCBuffer *buffer = parcBuffer_Acquire(ccnxInterest_GetPayload(interest));
-    printf("Payload length = %zu\n", parcBuffer_Remaining(buffer));
     char *bufferString = parcBuffer_ToString(buffer);
-    printf("buffer from payload = %s\n", bufferString);
     cJSON *message = cJSON_Parse(bufferString);
 
     parcBuffer_Release(&buffer);
     ccnxMetaMessage_Release(&request);
-
-    printf("message: %s\n", bufferString);
-
-    // CBuffer *cbuffer = cbuffer_Create();
-    // cbuffer_AppendBytes(cbuffer, parcBuffer_Overlay(buffer), parcBuffer_Remaining(buffer));
-    // parcBuffer_Release(&buffer);
 
     return message;
 }
@@ -92,7 +81,7 @@ producerPortal_Put(CCNProducer *producer, CCNxName *name, cJSON *buffer) // inte
     char *bufferString = cJSON_Print(buffer);
     PARCBuffer *responsePayload = parcBuffer_WrapCString(bufferString);
 
-    CCNxContentObject *response = ccnxContentObject_CreateWithDataPayload(name, responsePayload);
+    CCNxContentObject *response = ccnxContentObject_CreateWithNameAndPayload(name, responsePayload);
     CCNxMetaMessage *message = ccnxMetaMessage_CreateFromContentObject(response);
 
     if (ccnxPortal_Send(producer->portal, message, CCNxStackTimeout_Never) == false) {
@@ -107,42 +96,17 @@ ccnProducer_Run(CCNProducer *producer)
         CCNxName *name = NULL;
         cJSON *message = producerPortal_Get(producer, &name);
         if (message != NULL) {
-            printf("Preparing the response... %d %d\n", producer->callback, producer->callbackMetadata);
             cJSON *response = producer->callback(producer->callbackMetadata, message);
-            printf("sending it back\n");
             producerPortal_Put(producer, name, response);
-            printf("Sent the response back!\n");
         } else {
-            printf("Sending empty\n");
             cJSON *emptyResponse = cJSON_CreateString("Invalid message");
             producerPortal_Put(producer, name, emptyResponse);
-            printf("Sent the response back!\n");
         }
     }
 }
 
-
-/// REFERENCE CODE
-// if (interest != NULL) {
-//     CCNxName *interestName = ccnxInterest_GetName(interest);
-//
-//     if (ccnxName_Equals(interestName, contentName)) {
-//
-//         PARCBuffer *payload = makePayload();
-//
-//         CCNxContentObject *contentObject = ccnxContentObject_CreateWithDataPayload(contentName, payload);
-//
-//         CCNxMetaMessage *message = ccnxMetaMessage_CreateFromContentObject(contentObject);
-//
-//         if (ccnxPortal_Send(portal, message) == false) {
-//             fprintf(stderr, "ccnxPortal_Send failed: %d\n", ccnxPortal_GetError(portal));
-//         }
-//
-//         ccnxMetaMessage_Release(&message);
-//
-//         parcBuffer_Release(&payload);
-//     } else if (ccnxName_Equals(interestName, goodbye)) {
-//         break;
-//     }
-// }
-// ccnxMetaMessage_Release(&request);
+bool
+ccnProducer_Publish(CCNProducer *producer, CBuffer *data)
+{
+    // TODO: insert into the repo
+}

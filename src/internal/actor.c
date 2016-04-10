@@ -144,7 +144,6 @@ localActor_Run(LocalActor *actor)
 static void
 globalActor_Run(GlobalActor *actor)
 {
-    // TODO: spin up a thread to handle the portal runner and then invoke the local handler here
     actor_Start(actor->actor);
 
     pthread_t *t = (pthread_t *) malloc(sizeof(pthread_t));

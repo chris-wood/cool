@@ -36,7 +36,7 @@ ccnFetcher_Create()
 cJSON *
 ccnFetcher_Fetch(CCNFetcher *fetcher, char *nameString, cJSON *message)
 {
-    CCNxName *name = ccnxName_CreateFromURI(nameString);
+    CCNxName *name = ccnxName_CreateFromCString(nameString);
     if (name != NULL) {
         PARCBuffer *buffer = NULL;
         if (message != NULL) {
