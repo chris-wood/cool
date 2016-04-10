@@ -248,33 +248,6 @@ internal/actor.c.s:
 	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/actor.c.s
 .PHONY : internal/actor.c.s
 
-internal/actor_message.o: internal/actor_message.c.o
-
-.PHONY : internal/actor_message.o
-
-# target to build an object file
-internal/actor_message.c.o:
-	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/actor_message.c.o
-.PHONY : internal/actor_message.c.o
-
-internal/actor_message.i: internal/actor_message.c.i
-
-.PHONY : internal/actor_message.i
-
-# target to preprocess a source file
-internal/actor_message.c.i:
-	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/actor_message.c.i
-.PHONY : internal/actor_message.c.i
-
-internal/actor_message.s: internal/actor_message.c.s
-
-.PHONY : internal/actor_message.s
-
-# target to generate assembly for a file
-internal/actor_message.c.s:
-	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/actor_message.c.s
-.PHONY : internal/actor_message.c.s
-
 internal/buffer.o: internal/buffer.c.o
 
 .PHONY : internal/buffer.o
@@ -437,6 +410,33 @@ internal/encoding/cJSON.c.s:
 	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/encoding/cJSON.c.s
 .PHONY : internal/encoding/cJSON.c.s
 
+internal/mpc.o: internal/mpc.c.o
+
+.PHONY : internal/mpc.o
+
+# target to build an object file
+internal/mpc.c.o:
+	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/mpc.c.o
+.PHONY : internal/mpc.c.o
+
+internal/mpc.i: internal/mpc.c.i
+
+.PHONY : internal/mpc.i
+
+# target to preprocess a source file
+internal/mpc.c.i:
+	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/mpc.c.i
+.PHONY : internal/mpc.c.i
+
+internal/mpc.s: internal/mpc.c.s
+
+.PHONY : internal/mpc.s
+
+# target to generate assembly for a file
+internal/mpc.c.s:
+	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/mpc.c.s
+.PHONY : internal/mpc.c.s
+
 internal/signal.o: internal/signal.c.o
 
 .PHONY : internal/signal.o
@@ -464,33 +464,6 @@ internal/signal.c.s:
 	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/internal/signal.c.s
 .PHONY : internal/signal.c.s
 
-mpc.o: mpc.c.o
-
-.PHONY : mpc.o
-
-# target to build an object file
-mpc.c.o:
-	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/mpc.c.o
-.PHONY : mpc.c.o
-
-mpc.i: mpc.c.i
-
-.PHONY : mpc.i
-
-# target to preprocess a source file
-mpc.c.i:
-	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/mpc.c.i
-.PHONY : mpc.c.i
-
-mpc.s: mpc.c.s
-
-.PHONY : mpc.s
-
-# target to generate assembly for a file
-mpc.c.s:
-	$(MAKE) -f CMakeFiles/cool.dir/build.make CMakeFiles/cool.dir/mpc.c.s
-.PHONY : mpc.c.s
-
 # Help Target
 help:
 	@echo "The following are some of the valid targets for this Makefile:"
@@ -513,9 +486,6 @@ help:
 	@echo "... internal/actor.o"
 	@echo "... internal/actor.i"
 	@echo "... internal/actor.s"
-	@echo "... internal/actor_message.o"
-	@echo "... internal/actor_message.i"
-	@echo "... internal/actor_message.s"
 	@echo "... internal/buffer.o"
 	@echo "... internal/buffer.i"
 	@echo "... internal/buffer.s"
@@ -534,12 +504,12 @@ help:
 	@echo "... internal/encoding/cJSON.o"
 	@echo "... internal/encoding/cJSON.i"
 	@echo "... internal/encoding/cJSON.s"
+	@echo "... internal/mpc.o"
+	@echo "... internal/mpc.i"
+	@echo "... internal/mpc.s"
 	@echo "... internal/signal.o"
 	@echo "... internal/signal.i"
 	@echo "... internal/signal.s"
-	@echo "... mpc.o"
-	@echo "... mpc.i"
-	@echo "... mpc.s"
 .PHONY : help
 
 

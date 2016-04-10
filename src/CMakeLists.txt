@@ -14,13 +14,12 @@ set(cool_INCLUDE_DIRS
 
 include_directories(
         /usr/local/include/
-        /Users/cwood/PARC/CCNx_Distillery/usr/include/
+        /Users/cwood/PARC/side/Dev/usr/include/
         ${cool_INCLUDE_DIRS}
     )
 
 set(cool_SOURCES
         ${CMAKE_SOURCE_DIR}/internal/actor.c
-        ${CMAKE_SOURCE_DIR}/internal/actor_message.c
         ${CMAKE_SOURCE_DIR}/internal/buffer.c
         ${CMAKE_SOURCE_DIR}/internal/ccn/ccn_common.c
         ${CMAKE_SOURCE_DIR}/internal/ccn/ccn_fetcher.c
@@ -28,14 +27,14 @@ set(cool_SOURCES
         ${CMAKE_SOURCE_DIR}/internal/channel.c
         ${CMAKE_SOURCE_DIR}/internal/encoding/cJSON.c
         ${CMAKE_SOURCE_DIR}/internal/signal.c
-        ${CMAKE_SOURCE_DIR}/mpc.c
+        ${CMAKE_SOURCE_DIR}/internal/mpc.c
         ${CMAKE_SOURCE_DIR}/cool.c
         ${CMAKE_SOURCE_DIR}/cooli.c
     )
 
 
 link_directories(
-        /Users/cwood/PARC/CCNx_Distillery/usr/lib
+        /Users/cwood/PARC/side/Dev/usr/lib/
         /usr/local/lib
     )
 

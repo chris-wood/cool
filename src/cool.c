@@ -289,15 +289,10 @@ value_Lambda(Value *formals, Value *body)
 
 cJSON *
 value_FunctionWrapper(EvaluateWrapper *wrapper, cJSON *encodedParameters) {
-    printf("FUNCTION  INPUT: %s\n", cJSON_Print(encodedParameters));
-
     Value *parameters = value_FromJSON(encodedParameters);
     Value *functionBody = value_Copy(wrapper->param);
     Value *result = value_Call(wrapper->env, functionBody, parameters);
     cJSON *encodedResult = value_ToJSON(result);
-
-    printf("FUNCTION OUTPUT = %s\n", cJSON_Print(encodedResult));
-
     return encodedResult;
 }
 
